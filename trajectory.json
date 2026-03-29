@@ -1,0 +1,41 @@
+{
+  "metadata": {
+    "scene": "tabletop_fruit",
+    "task": "Pick up the banana",
+    "num_steps": 5
+  },
+  "waypoints": [
+    {
+      "label": "move_to_offset(Banana)",
+      "position": {
+        "x": 0.3,
+        "y": 0.1,
+        "z": 0.12000000000000001
+      }
+    },
+    {
+      "label": "open_gripper",
+      "gripper": "open"
+    },
+    {
+      "label": "move_to(Banana)",
+      "position": {
+        "x": 0.3,
+        "y": 0.1,
+        "z": 0.02
+      }
+    },
+    {
+      "label": "close_gripper",
+      "gripper": "close"
+    },
+    {
+      "label": "move_to_offset(Banana)",
+      "position": {
+        "x": 0.3,
+        "y": 0.1,
+        "z": 0.16999999999999998
+      }
+    }
+  ]
+}
