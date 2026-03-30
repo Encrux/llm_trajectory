@@ -60,6 +60,13 @@ export class Animator {
   play(): void {
     if (!this.trajectory || this.trajectory.waypoints.length === 0) return;
     if (this.status === "done") this.currentStep = 0;
+
+    // Enable weld constraint(s) so mocap drives the arm
+    this.setWeldActive(true);
+
+    // Sync mocap to current hand position before starting
+    this.syncMocapToHand();
+
     this.setStatus("running");
     this.prepareStep();
     this.tick();
@@ -74,6 +81,32 @@ export class Animator {
     this.setStatus("idle");
     this.currentStep = 0;
     this.cancelFrame();
+    // Disable weld so arm returns to actuator-controlled idle
+    this.setWeldActive(false);
+  }
+
+  private setWeldActive(active: boolean): void {
+    const { model, data } = this.state;
+    // The weld constraint is the last equality constraint (added by our scene XML)
+    // Keep the finger coupling constraint (index 0) always active
+    const weldIdx = model.neq - 1;
+    data.eq_active[weldIdx] = active ? 1 : 0;
+  }
+
+  private syncMocapToHand(): void {
+    const { mj, model, data } = this.state;
+    const handId = mj.mj_name2id(model, mj.mjtObj.mjOBJ_BODY.value, "hand");
+    if (handId >= 0) {
+      data.mocap_pos[0] = data.xpos[handId * 3 + 0];
+      data.mocap_pos[1] = data.xpos[handId * 3 + 1];
+      data.mocap_pos[2] = data.xpos[handId * 3 + 2];
+      if (data.mocap_quat.length >= 4) {
+        data.mocap_quat[0] = data.xquat[handId * 4 + 0];
+        data.mocap_quat[1] = data.xquat[handId * 4 + 1];
+        data.mocap_quat[2] = data.xquat[handId * 4 + 2];
+        data.mocap_quat[3] = data.xquat[handId * 4 + 3];
+      }
+    }
   }
 
   getStatus(): AnimatorStatus {
@@ -115,7 +148,8 @@ export class Animator {
     } else if (wp.gripper) {
       // Set gripper control
       const { data } = this.state;
-      data.ctrl[this.gripperActuatorIdx] = wp.gripper === "open" ? 0 : 255;
+      // Panda gripper: 255 = open (fingers at 0.04m), 0 = closed (fingers at 0)
+      data.ctrl[this.gripperActuatorIdx] = wp.gripper === "open" ? 255 : 0;
       this.startPos = null;
       this.targetPos = null;
       this.totalSteps = STEPS_PER_GRIPPER;

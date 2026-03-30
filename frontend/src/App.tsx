@@ -1,43 +1,73 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { loadMujoco, type MujocoState } from "./sim/mujocoLoader";
 import { initRenderer, render as renderThree, handleResize, type RendererState } from "./sim/threeRenderer";
 import { buildVisuals, syncVisuals, type VisualizerState } from "./sim/mujocoVisualizer";
 import { extractScene } from "./sim/sceneExtractor";
-import type { Scene } from "./core/scene";
+import { Animator, type AnimatorStatus } from "./sim/animator";
+import { Scene } from "./core/scene";
+import type { ApiConfig, ToolCall, Trajectory } from "./core/types";
+import { buildPrompt } from "./core/prompt";
+import { toOpenAITools } from "./core/primitives";
+import { callLLM } from "./core/llmClient";
+import { transpile } from "./core/transpiler";
+import { loadConfig, saveConfig } from "./config";
+import { ScenePanel } from "./components/ScenePanel";
+import { TaskInput } from "./components/TaskInput";
+import { PlanView } from "./components/PlanView";
+import { ExecutionControls } from "./components/ExecutionControls";
+import { ConfigDialog } from "./components/ConfigDialog";
+import { StatusBar } from "./components/StatusBar";
+import "./styles/index.css";
 
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [scene, setScene] = useState<Scene | null>(null);
 
+  // Sim state (refs to avoid re-renders)
   const mujocoRef = useRef<MujocoState | null>(null);
   const rendererRef = useRef<RendererState | null>(null);
   const vizRef = useRef<VisualizerState | null>(null);
+  const animatorRef = useRef<Animator | null>(null);
 
+  // UI state
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [scene, setScene] = useState<Scene | null>(null);
+  const [plan, setPlan] = useState<ToolCall[] | null>(null);
+  const [trajectory, setTrajectory] = useState<Trajectory | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [animatorStatus, setAnimatorStatus] = useState<AnimatorStatus>("idle");
+  const [currentStep, setCurrentStep] = useState(-1);
+  const [config, setConfigState] = useState<ApiConfig>(loadConfig());
+  const [showConfig, setShowConfig] = useState(false);
+
+  // Init MuJoCo + Three.js
   useEffect(() => {
     let mounted = true;
     let frameId: number;
 
     async function init() {
       try {
-        console.log("[init] Loading MuJoCo WASM...");
         const mState = await loadMujoco();
         if (!mounted) return;
         mujocoRef.current = mState;
-        console.log("[init] MuJoCo loaded. nbody:", mState.model.nbody, "ngeom:", mState.model.ngeom);
 
         const rState = initRenderer(canvasRef.current!);
         rendererRef.current = rState;
-        console.log("[init] Three.js renderer initialized");
 
         const vState = buildVisuals(mState, rState);
         vizRef.current = vState;
-        console.log("[init] Built", vState.geomMeshes.length, "visual meshes");
 
         const extractedScene = extractScene(mState);
         setScene(extractedScene);
-        console.log("[init] Scene extracted:", extractedScene.objectNames());
+
+        // Create animator
+        animatorRef.current = new Animator(mState, {
+          onStepStart: (idx) => setCurrentStep(idx),
+          onStepComplete: () => {},
+          onStatusChange: (s) => setAnimatorStatus(s),
+          onError: (e) => setError(e.message),
+        });
+
         setLoading(false);
 
         function animate() {
@@ -61,6 +91,7 @@ function App() {
     };
   }, []);
 
+  // Resize handler
   useEffect(() => {
     function onResize() {
       if (!canvasRef.current || !rendererRef.current) return;
@@ -72,30 +103,97 @@ function App() {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
+  // Generate plan
+  const handleGenerate = useCallback(async (task: string) => {
+    if (!scene) return;
+    setIsGenerating(true);
+    setError(null);
+    setPlan(null);
+    setTrajectory(null);
+    setCurrentStep(-1);
+    setAnimatorStatus("idle");
+
+    try {
+      const prompt = buildPrompt(scene, task);
+      const tools = toOpenAITools();
+      const toolCalls = await callLLM(prompt, tools, config);
+      setPlan(toolCalls);
+
+      if (toolCalls.length > 0) {
+        // Re-extract scene (objects may have moved from previous run)
+        const currentScene = extractScene(mujocoRef.current!);
+        const traj = transpile(toolCalls, currentScene);
+        setTrajectory(traj);
+
+        // Load into animator
+        animatorRef.current?.loadTrajectory(traj);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [scene, config]);
+
+  // Execution controls
+  const handlePlay = useCallback(() => animatorRef.current?.play(), []);
+  const handlePause = useCallback(() => animatorRef.current?.pause(), []);
+  const handleReset = useCallback(() => {
+    animatorRef.current?.reset();
+    setCurrentStep(-1);
+  }, []);
+
+  // Config
+  const handleSaveConfig = useCallback((newConfig: ApiConfig) => {
+    setConfigState(newConfig);
+    saveConfig(newConfig);
+  }, []);
+
   return (
-    <div style={{ width: "100vw", height: "100vh", position: "relative" }}>
-      <canvas ref={canvasRef} style={{ width: "100%", height: "100%" }} />
-      {loading && (
-        <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", color: "#333", fontSize: "1.2rem" }}>
-          Loading MuJoCo...
+    <div className="app-layout">
+      <div className="viewport-container">
+        <canvas ref={canvasRef} />
+        {loading && <div className="viewport-overlay">Loading MuJoCo...</div>}
+        {error && !loading && <div className="viewport-overlay error">{error}</div>}
+      </div>
+
+      <div className="sidebar">
+        <div className="sidebar-header">
+          <h1>LLM Trajectory</h1>
+          <button onClick={() => setShowConfig(true)} title="Settings">
+            &#9881;
+          </button>
         </div>
-      )}
-      {error && (
-        <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", color: "red", fontSize: "1rem", maxWidth: "80%" }}>
-          Error: {error}
-        </div>
-      )}
-      {scene && !loading && (
-        <div style={{ position: "absolute", top: 16, right: 16, background: "rgba(255,255,255,0.9)", padding: "12px 16px", borderRadius: 8, fontSize: "0.85rem" }}>
-          <strong>Scene Objects</strong>
-          <ul style={{ margin: "8px 0 0", paddingLeft: 16 }}>
-            {scene.objects.map((o) => (
-              <li key={o.name}>
-                {o.name} ({o.position.x.toFixed(2)}, {o.position.y.toFixed(2)}, {o.position.z.toFixed(2)})
-              </li>
-            ))}
-          </ul>
-        </div>
+
+        <ScenePanel scene={scene} />
+        <TaskInput
+          onGenerate={handleGenerate}
+          isGenerating={isGenerating}
+          disabled={loading || !scene}
+        />
+        <PlanView plan={plan} currentStep={currentStep} />
+        <ExecutionControls
+          status={animatorStatus}
+          onPlay={handlePlay}
+          onPause={handlePause}
+          onReset={handleReset}
+          disabled={!trajectory}
+        />
+      </div>
+
+      <StatusBar
+        config={config}
+        animatorStatus={animatorStatus}
+        error={error}
+        loading={loading}
+      />
+
+      {showConfig && (
+        <ConfigDialog
+          config={config}
+          onSave={handleSaveConfig}
+          onClose={() => setShowConfig(false)}
+        />
       )}
     </div>
   );

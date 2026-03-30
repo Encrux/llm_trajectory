@@ -22,8 +22,8 @@ describe("buildPrompt", () => {
 
   it("includes instructions", () => {
     const prompt = buildPrompt(scene, "test");
-    expect(prompt).toContain("Do NOT use raw coordinates");
-    expect(prompt).toContain("move_to_point_offset");
+    expect(prompt).toContain("Do NOT invent coordinates");
+    expect(prompt).toContain("pick-and-place");
   });
 });
 

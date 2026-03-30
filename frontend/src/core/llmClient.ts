@@ -15,7 +15,7 @@ export async function callLLM(
       },
     ],
     tools,
-    tool_choice: "auto",
+    tool_choice: "required",
   };
 
   const headers: Record<string, string> = {
@@ -46,7 +46,7 @@ export async function callLLM(
   return message.tool_calls.map(
     (tc: { function: { name: string; arguments: string } }) => ({
       name: tc.function.name,
-      params: JSON.parse(tc.function.arguments),
+      params: tc.function.arguments ? JSON.parse(tc.function.arguments) : {},
     }),
   );
 }

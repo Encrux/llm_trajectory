@@ -35,15 +35,51 @@ async function doLoad(): Promise<MujocoState> {
   console.log("[mujoco] Merged scene XML written");
 
   // Load model
-  // Debug: print the merged XML
-  const writtenXml = new TextDecoder().decode(mj.FS.readFile("/working/scene.xml"));
-  console.log("[mujoco] Merged XML:\n", writtenXml.substring(0, 2000));
-  console.log("[mujoco] Loading model...");
   const model = mj.MjModel.loadFromXML("/working/scene.xml");
-  console.log("[mujoco] Model loaded. nbody:", model.nbody, "ngeom:", model.ngeom);
   const data = new mj.MjData(model);
+
+  // Apply home keyframe to arm joints only (first 9 qpos: 7 arm + 2 finger)
+  // Don't overwrite free-joint qpos (object positions) which come after
+  if (model.nkey > 0) {
+    const ARM_NQ = 9; // 7 arm joints + 2 finger slide joints
+    const keyQpos = model.key_qpos;
+    for (let i = 0; i < ARM_NQ; i++) {
+      data.qpos[i] = keyQpos[i];
+    }
+    const nu = model.nu;
+    const keyCtrl = model.key_ctrl;
+    for (let i = 0; i < nu; i++) {
+      data.ctrl[i] = keyCtrl[i];
+    }
+  }
+
+  // Disable the weld constraint (last eq) at startup so the arm stays in home pose
+  // Keep the finger coupling constraint (first eq) active
+  // The animator will enable the weld when executing a trajectory
+  const weldIdx = model.neq - 1;
+  data.eq_active[weldIdx] = 0;
+
   mj.mj_forward(model, data);
-  console.log("[mujoco] Ready");
+
+  // Initialize mocap body to current hand position (for when weld activates)
+  const handId = mj.mj_name2id(model, mj.mjtObj.mjOBJ_BODY.value, "hand");
+  if (handId >= 0 && data.mocap_pos.length >= 3) {
+    data.mocap_pos[0] = data.xpos[handId * 3 + 0];
+    data.mocap_pos[1] = data.xpos[handId * 3 + 1];
+    data.mocap_pos[2] = data.xpos[handId * 3 + 2];
+    if (data.mocap_quat.length >= 4) {
+      data.mocap_quat[0] = data.xquat[handId * 4 + 0];
+      data.mocap_quat[1] = data.xquat[handId * 4 + 1];
+      data.mocap_quat[2] = data.xquat[handId * 4 + 2];
+      data.mocap_quat[3] = data.xquat[handId * 4 + 3];
+    }
+  }
+
+  console.log("[mujoco] Ready. Hand position:",
+    data.xpos[handId * 3].toFixed(3),
+    data.xpos[handId * 3 + 1].toFixed(3),
+    data.xpos[handId * 3 + 2].toFixed(3),
+  );
 
   return { mj, model, data };
 }

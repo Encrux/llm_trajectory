@@ -1,0 +1,305 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  overflow: hidden;
+}
+
+.app-layout {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  grid-template-rows: 1fr auto;
+  width: 100vw;
+  height: 100vh;
+}
+
+.viewport-container {
+  position: relative;
+  grid-row: 1;
+  grid-column: 1;
+  overflow: hidden;
+}
+
+.viewport-container canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.viewport-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 1.1rem;
+  color: #aaa;
+}
+
+.viewport-overlay.error {
+  color: #ff6b6b;
+  max-width: 80%;
+  text-align: center;
+}
+
+/* Sidebar */
+.sidebar {
+  grid-row: 1;
+  grid-column: 2;
+  background: #16213e;
+  border-left: 1px solid #0f3460;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.sidebar-header {
+  padding: 16px;
+  border-bottom: 1px solid #0f3460;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sidebar-header h1 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #e0e0e0;
+}
+
+.sidebar-header button {
+  background: none;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  font-size: 1.2rem;
+  padding: 4px;
+}
+
+.sidebar-header button:hover {
+  color: #e0e0e0;
+}
+
+.panel {
+  padding: 12px 16px;
+  border-bottom: 1px solid #0f3460;
+}
+
+.panel h2 {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #888;
+  margin-bottom: 8px;
+}
+
+/* Scene Panel */
+.scene-objects {
+  list-style: none;
+  font-size: 0.85rem;
+}
+
+.scene-objects li {
+  padding: 4px 0;
+  display: flex;
+  justify-content: space-between;
+}
+
+.scene-objects .coords {
+  color: #666;
+  font-family: monospace;
+  font-size: 0.8rem;
+}
+
+/* Task Input */
+.task-input textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #0f3460;
+  border-radius: 6px;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  font-size: 0.85rem;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 60px;
+}
+
+.task-input textarea:focus {
+  outline: none;
+  border-color: #533483;
+}
+
+.task-input .actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.btn {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-primary {
+  background: #533483;
+  color: white;
+  flex: 1;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #6a42a0;
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: #0f3460;
+  color: #ccc;
+}
+
+.btn-secondary:hover {
+  background: #1a4a7a;
+}
+
+/* Plan View */
+.plan-steps {
+  list-style: none;
+  font-size: 0.82rem;
+  font-family: monospace;
+}
+
+.plan-steps li {
+  padding: 4px 8px;
+  border-radius: 4px;
+  margin-bottom: 2px;
+  display: flex;
+  gap: 8px;
+}
+
+.plan-steps li .step-idx {
+  color: #666;
+  min-width: 20px;
+}
+
+.plan-steps li.active {
+  background: #533483;
+  color: white;
+}
+
+.plan-steps li.completed {
+  color: #666;
+}
+
+.plan-empty {
+  color: #555;
+  font-size: 0.82rem;
+  font-style: italic;
+}
+
+/* Execution Controls */
+.exec-controls {
+  display: flex;
+  gap: 6px;
+}
+
+.exec-controls .btn {
+  flex: 1;
+  padding: 8px;
+  font-size: 0.9rem;
+}
+
+/* Status Bar */
+.status-bar {
+  grid-row: 2;
+  grid-column: 1 / -1;
+  background: #0f3460;
+  padding: 6px 16px;
+  font-size: 0.75rem;
+  color: #888;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.status-bar .dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 4px;
+}
+
+.status-bar .dot.green { background: #4caf50; }
+.status-bar .dot.red { background: #f44336; }
+.status-bar .dot.yellow { background: #ff9800; }
+
+/* Config Dialog */
+.config-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.config-dialog {
+  background: #16213e;
+  border: 1px solid #0f3460;
+  border-radius: 12px;
+  padding: 24px;
+  width: 400px;
+  max-width: 90vw;
+}
+
+.config-dialog h2 {
+  font-size: 1rem;
+  margin-bottom: 16px;
+}
+
+.config-dialog label {
+  display: block;
+  font-size: 0.8rem;
+  color: #888;
+  margin-bottom: 4px;
+  margin-top: 12px;
+}
+
+.config-dialog input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #0f3460;
+  border-radius: 6px;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  font-size: 0.85rem;
+  font-family: monospace;
+}
+
+.config-dialog input:focus {
+  outline: none;
+  border-color: #533483;
+}
+
+.config-dialog .actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 20px;
+  justify-content: flex-end;
+}

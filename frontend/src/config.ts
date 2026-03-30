@@ -2,8 +2,8 @@ import type { ApiConfig } from "./core/types";
 
 const DEFAULT_CONFIG: ApiConfig = {
   baseUrl: import.meta.env.VITE_API_BASE_URL || "http://localhost:8000",
-  apiToken: "",
-  model: "llama-3.3-70b-versatile",
+  apiToken: import.meta.env.VITE_API_TOKEN || "",
+  model: import.meta.env.VITE_MODEL || "llama-3.3-70b-versatile",
 };
 
 const STORAGE_KEY = "llm-trajectory-config";
