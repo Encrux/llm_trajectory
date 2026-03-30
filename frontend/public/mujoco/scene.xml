@@ -20,46 +20,41 @@
     <light pos="0 0 1.5" dir="0 0 -1" directional="true"/>
     <geom name="floor" size="0 0 0.05" type="plane" material="groundplane"/>
 
-    <!-- Table -->
-    <body name="table" pos="0.5 0 0.2">
-      <geom name="table_top" type="box" size="0.3 0.4 0.02" rgba="0.6 0.45 0.3 1" mass="100"/>
-      <geom name="leg1" type="cylinder" size="0.025 0.1" pos="0.25 0.35 -0.12" rgba="0.5 0.4 0.25 1"/>
-      <geom name="leg2" type="cylinder" size="0.025 0.1" pos="-0.25 0.35 -0.12" rgba="0.5 0.4 0.25 1"/>
-      <geom name="leg3" type="cylinder" size="0.025 0.1" pos="0.25 -0.35 -0.12" rgba="0.5 0.4 0.25 1"/>
-      <geom name="leg4" type="cylinder" size="0.025 0.1" pos="-0.25 -0.35 -0.12" rgba="0.5 0.4 0.25 1"/>
+    <!-- Table — at Panda's natural working height -->
+    <body name="table" pos="0.45 0 0.3">
+      <geom name="table_top" type="box" size="0.25 0.35 0.015" rgba="0.6 0.45 0.3 1" mass="100"/>
+      <geom name="leg1" type="cylinder" size="0.02 0.15" pos="0.2 0.3 -0.165" rgba="0.5 0.4 0.25 1"/>
+      <geom name="leg2" type="cylinder" size="0.02 0.15" pos="-0.2 0.3 -0.165" rgba="0.5 0.4 0.25 1"/>
+      <geom name="leg3" type="cylinder" size="0.02 0.15" pos="0.2 -0.3 -0.165" rgba="0.5 0.4 0.25 1"/>
+      <geom name="leg4" type="cylinder" size="0.02 0.15" pos="-0.2 -0.3 -0.165" rgba="0.5 0.4 0.25 1"/>
     </body>
 
-    <!-- Manipulable objects (free-joint bodies) -->
-    <body name="Banana" pos="0.4 0.1 0.25">
+    <!-- Objects on table (z = table_top + half_table_height + half_object_height) -->
+    <body name="Banana" pos="0.4 0.1 0.34">
       <freejoint name="Banana_jnt"/>
       <geom type="capsule" size="0.015 0.04" rgba="1 0.9 0.1 1" mass="0.1"
             friction="1.5 0.005 0.0001"/>
     </body>
 
-    <body name="Apple" pos="0.55 -0.1 0.25">
+    <body name="Apple" pos="0.5 -0.1 0.34">
       <freejoint name="Apple_jnt"/>
-      <geom type="sphere" size="0.03" rgba="0.9 0.15 0.1 1" mass="0.15"
+      <geom type="sphere" size="0.025" rgba="0.9 0.15 0.1 1" mass="0.15"
             friction="1.5 0.005 0.0001"/>
     </body>
 
-    <body name="Orange" pos="0.45 -0.15 0.25">
+    <body name="Orange" pos="0.45 -0.15 0.34">
       <freejoint name="Orange_jnt"/>
-      <geom type="sphere" size="0.03" rgba="1.0 0.55 0.1 1" mass="0.12"
+      <geom type="sphere" size="0.025" rgba="1.0 0.55 0.1 1" mass="0.12"
             friction="1.5 0.005 0.0001"/>
     </body>
 
-    <body name="Bowl" pos="0.6 0.15 0.235">
-      <geom type="cylinder" size="0.06 0.025" rgba="0.92 0.92 0.9 1" mass="0.3"/>
+    <body name="Bowl" pos="0.55 0.15 0.33">
+      <geom type="cylinder" size="0.05 0.02" rgba="0.92 0.92 0.9 1" mass="0.3"/>
     </body>
 
-    <!-- Mocap target for end-effector control -->
-    <body name="target" mocap="true" pos="0.4 0 0.6">
-      <geom type="sphere" size="0.01" rgba="1 0 0 0.3" contype="0" conaffinity="0"/>
+    <!-- Mocap target (red dot) -->
+    <body name="target" mocap="true" pos="0.4 0 0.5">
+      <geom type="sphere" size="0.015" rgba="1 0 0 0.5" contype="0" conaffinity="0"/>
     </body>
   </worldbody>
-
-  <!-- Weld hand to follow mocap target -->
-  <equality>
-    <weld body1="target" body2="hand" solref="0.01 1" solimp="0.95 0.99 0.001"/>
-  </equality>
 </mujoco>

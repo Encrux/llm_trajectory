@@ -15,7 +15,7 @@ export async function callLLM(
       },
     ],
     tools,
-    tool_choice: "required",
+    tool_choice: "auto",
   };
 
   const headers: Record<string, string> = {
