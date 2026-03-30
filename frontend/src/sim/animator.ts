@@ -17,16 +17,16 @@ const PHYSICS_SUBSTEPS = 5; // mj_step calls per frame
 const NUM_ARM_JOINTS = 7;
 
 // IK params
-const IK_MAX_ITER = 100;
-const IK_TOL = 0.005;
+const IK_MAX_ITER = 300;
+const IK_POS_TOL = 0.003;
+const IK_ORI_TOL = 0.01;
 
 // TCP offset: hand body origin → actual fingertip grasp point (meters, in hand-local Z)
 // Adjust this to calibrate where the gripper centers on the target
 const TCP_Z_OFFSET = 0.105;
 
-// Joints to lock at home values during IK (wrist joints — prevents EE rotation)
-// Joint indices: 0=shoulder_pan, 1=shoulder_lift, 2=elbow, 3=wrist1, 4=wrist2, 5=wrist3, 6=wrist_roll
-const LOCKED_JOINTS = [4, 5, 6]; // wrist joints locked to home orientation
+// Orientation weight in IK — balances position vs orientation convergence
+const ORI_WEIGHT = 1.0;
 
 export class Animator {
   private state: MujocoState;
@@ -45,8 +45,8 @@ export class Animator {
   private targetQpos: Float64Array | null = null;
   // Locked arm qpos — maintained during gripper/wait steps to prevent drift
   private lockedArmQpos: Float64Array | null = null;
-  // Home joint values for locked wrist joints
-  private homeQpos: Float64Array;
+  // Home orientation matrix (3x3, row-major) — the desired EE orientation
+  private homeOriMat: Float64Array;
   // IK goal marker (Three.js sphere, green)
   private ikGoalMarker: THREE.Mesh | null = null;
 
@@ -57,12 +57,13 @@ export class Animator {
     this.gripperActuatorIdx = model.nu - 1;
     this.handBodyId = mj.mj_name2id(model, mj.mjtObj.mjOBJ_BODY.value, "hand");
 
-    // Save home joint values (for locking wrist joints)
+    // Save home orientation of the hand (desired EE orientation = face down)
     const data = state.data;
     mj.mj_forward(model, data);
-    this.homeQpos = new Float64Array(NUM_ARM_JOINTS);
-    for (let i = 0; i < NUM_ARM_JOINTS; i++) {
-      this.homeQpos[i] = data.qpos[i];
+    this.homeOriMat = new Float64Array(9);
+    const mi = this.handBodyId * 9;
+    for (let i = 0; i < 9; i++) {
+      this.homeOriMat[i] = data.xmat[mi + i];
     }
 
     // Show TCP debug point (red dot) at the current TCP position
@@ -161,8 +162,22 @@ export class Animator {
   }
 
   /**
-   * Numerical IK with TCP offset. Wrist joints locked to home values (no rotation).
-   * Only joints NOT in LOCKED_JOINTS are solved.
+   * Scalar orientation cost: sum of squared differences between
+   * current and home rotation matrix elements.
+   * Returns sqrt(cost) as a single error magnitude.
+   */
+  private getOriCost(data: any): number {
+    const mi = this.handBodyId * 9;
+    let cost = 0;
+    for (let i = 0; i < 9; i++) {
+      const d = data.xmat[mi + i] - this.homeOriMat[i];
+      cost += d * d;
+    }
+    return Math.sqrt(cost);
+  }
+
+  /**
+   * 6-DOF IK: position (TCP) + orientation (home), all 7 joints free.
    */
   private solveIK(target: Position): Float64Array {
     const { mj, model, data } = this.state;
@@ -170,70 +185,62 @@ export class Animator {
     const origQpos = new Float64Array(model.nq);
     for (let i = 0; i < model.nq; i++) origQpos[i] = data.qpos[i];
 
-    // Lock wrist joints to home values
-    const lockedSet = new Set(LOCKED_JOINTS);
-    for (const j of LOCKED_JOINTS) {
-      data.qpos[j] = this.homeQpos[j];
-    }
-
     const perturbDelta = 0.0001;
-    const maxJointStep = 0.1;
+    const stepSize = 0.2;
 
     for (let iter = 0; iter < IK_MAX_ITER; iter++) {
       mj.mj_forward(model, data);
 
+      // Compute combined cost: position + orientation
       const [tcpX, tcpY, tcpZ] = this.getTcpPos(data);
       const dx = target.x - tcpX;
       const dy = target.y - tcpY;
       const dz = target.z - tcpZ;
       const posErr = Math.sqrt(dx * dx + dy * dy + dz * dz);
-      if (posErr < IK_TOL) break;
+      const oriCost = this.getOriCost(data);
+      const totalCost = 0.5 * (dx*dx + dy*dy + dz*dz) + ORI_WEIGHT * 0.5 * oriCost * oriCost;
 
-      // Numerical Jacobian of TCP position — only for unlocked joints
-      const Jx = new Float64Array(NUM_ARM_JOINTS);
-      const Jy = new Float64Array(NUM_ARM_JOINTS);
-      const Jz = new Float64Array(NUM_ARM_JOINTS);
+      if (posErr < IK_POS_TOL && oriCost < IK_ORI_TOL) break;
+
+      // Numerical gradient of total cost w.r.t. each joint
+      const grad = new Float64Array(NUM_ARM_JOINTS);
       for (let j = 0; j < NUM_ARM_JOINTS; j++) {
-        if (lockedSet.has(j)) continue; // skip locked joints
         const saved = data.qpos[j];
         data.qpos[j] = saved + perturbDelta;
         mj.mj_forward(model, data);
-        const [ntcpX, ntcpY, ntcpZ] = this.getTcpPos(data);
-        Jx[j] = (ntcpX - tcpX) / perturbDelta;
-        Jy[j] = (ntcpY - tcpY) / perturbDelta;
-        Jz[j] = (ntcpZ - tcpZ) / perturbDelta;
+
+        const [nx, ny, nz] = this.getTcpPos(data);
+        const ndx = target.x - nx, ndy = target.y - ny, ndz = target.z - nz;
+        const nOriCost = this.getOriCost(data);
+        const nCost = 0.5 * (ndx*ndx + ndy*ndy + ndz*ndz) + ORI_WEIGHT * 0.5 * nOriCost * nOriCost;
+
+        grad[j] = (nCost - totalCost) / perturbDelta;
         data.qpos[j] = saved;
       }
-      mj.mj_forward(model, data);
 
-      // dq = J^T * error (only for unlocked joints)
-      const dq = new Float64Array(NUM_ARM_JOINTS);
-      for (let j = 0; j < NUM_ARM_JOINTS; j++) {
-        if (lockedSet.has(j)) continue;
-        dq[j] = Jx[j] * dx + Jy[j] * dy + Jz[j] * dz;
-      }
-
-      let maxAbs = 0;
-      for (let j = 0; j < NUM_ARM_JOINTS; j++) {
-        maxAbs = Math.max(maxAbs, Math.abs(dq[j]));
-      }
-      const scale = maxAbs > maxJointStep ? maxJointStep / maxAbs : 1.0;
+      // Gradient descent: q -= stepSize * grad
+      // Normalize gradient to prevent huge steps
+      let gradNorm = 0;
+      for (let j = 0; j < NUM_ARM_JOINTS; j++) gradNorm += grad[j] * grad[j];
+      gradNorm = Math.sqrt(gradNorm);
+      const effectiveStep = gradNorm > 1.0 ? stepSize / gradNorm : stepSize;
 
       for (let j = 0; j < NUM_ARM_JOINTS; j++) {
-        if (lockedSet.has(j)) continue;
-        data.qpos[j] += scale * dq[j];
+        data.qpos[j] -= effectiveStep * grad[j];
         const lo = model.jnt_range[j * 2 + 0];
         const hi = model.jnt_range[j * 2 + 1];
         if (lo < hi) {
           data.qpos[j] = Math.max(lo, Math.min(hi, data.qpos[j]));
         }
       }
-
-      // Re-enforce locked joints (in case of numerical drift)
-      for (const j of LOCKED_JOINTS) {
-        data.qpos[j] = this.homeQpos[j];
-      }
     }
+
+    // Log final IK errors
+    mj.mj_forward(model, data);
+    const [ftx, fty, ftz] = this.getTcpPos(data);
+    const fPosErr = Math.sqrt((target.x-ftx)**2 + (target.y-fty)**2 + (target.z-ftz)**2);
+    const fOriErr = this.getOriCost(data);
+    console.log(`[ik] pos_err: ${fPosErr.toFixed(4)}m, ori_err: ${fOriErr.toFixed(4)}`);
 
     const result = new Float64Array(NUM_ARM_JOINTS);
     for (let i = 0; i < NUM_ARM_JOINTS; i++) result[i] = data.qpos[i];
@@ -325,11 +332,6 @@ export class Animator {
           data.qpos[j] = this.lockedArmQpos[j];
           data.ctrl[j] = this.lockedArmQpos[j];
         }
-      }
-      // Always enforce locked wrist joints
-      for (const j of LOCKED_JOINTS) {
-        data.qpos[j] = this.homeQpos[j];
-        data.ctrl[j] = this.homeQpos[j];
       }
     }
 
