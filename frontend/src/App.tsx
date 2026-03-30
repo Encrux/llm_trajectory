@@ -60,18 +60,21 @@ function App() {
         const extractedScene = extractScene(mState);
         setScene(extractedScene);
 
-        // Create animator
+        // Create animator + give it the Three.js scene for IK goal marker
         animatorRef.current = new Animator(mState, {
           onStepStart: (idx) => setCurrentStep(idx),
           onStepComplete: () => {},
           onStatusChange: (s) => setAnimatorStatus(s),
           onError: (e) => setError(e.message),
         });
+        animatorRef.current.setThreeScene(rState.scene);
 
         setLoading(false);
 
         function animate() {
           if (!mounted) return;
+          // Keep red debug dot at TCP position
+          animatorRef.current?.updateTcpDebugPoint();
           syncVisuals(mujocoRef.current!, vizRef.current!);
           renderThree(rendererRef.current!);
           frameId = requestAnimationFrame(animate);

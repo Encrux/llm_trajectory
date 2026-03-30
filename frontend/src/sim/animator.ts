@@ -1,3 +1,4 @@
+import * as THREE from "three";
 import type { Position, Trajectory, Waypoint } from "../core/types";
 import type { MujocoState } from "./mujocoLoader";
 
@@ -17,8 +18,15 @@ const NUM_ARM_JOINTS = 7;
 
 // IK params
 const IK_MAX_ITER = 100;
-const IK_STEP_SIZE = 0.5;
 const IK_TOL = 0.005;
+
+// TCP offset: hand body origin → actual fingertip grasp point (meters, in hand-local Z)
+// Adjust this to calibrate where the gripper centers on the target
+const TCP_Z_OFFSET = 0.105;
+
+// Joints to lock at home values during IK (wrist joints — prevents EE rotation)
+// Joint indices: 0=shoulder_pan, 1=shoulder_lift, 2=elbow, 3=wrist1, 4=wrist2, 5=wrist3, 6=wrist_roll
+const LOCKED_JOINTS = [4, 5, 6]; // wrist joints locked to home orientation
 
 export class Animator {
   private state: MujocoState;
@@ -37,6 +45,10 @@ export class Animator {
   private targetQpos: Float64Array | null = null;
   // Locked arm qpos — maintained during gripper/wait steps to prevent drift
   private lockedArmQpos: Float64Array | null = null;
+  // Home joint values for locked wrist joints
+  private homeQpos: Float64Array;
+  // IK goal marker (Three.js sphere, green)
+  private ikGoalMarker: THREE.Mesh | null = null;
 
   constructor(state: MujocoState, callbacks: AnimatorCallbacks = {}) {
     this.state = state;
@@ -45,17 +57,16 @@ export class Animator {
     this.gripperActuatorIdx = model.nu - 1;
     this.handBodyId = mj.mj_name2id(model, mj.mjtObj.mjOBJ_BODY.value, "hand");
 
-    // Debug: log body names and IDs to verify
+    // Save home joint values (for locking wrist joints)
     const data = state.data;
-    console.log("[animator] handBodyId:", this.handBodyId);
-    for (let i = 0; i < model.nbody; i++) {
-      const name = mj.mj_id2name(model, mj.mjtObj.mjOBJ_BODY.value, i) || "(unnamed)";
-      console.log(`[animator] body ${i}: ${name}, pos: ${data.xpos[i*3].toFixed(3)}, ${data.xpos[i*3+1].toFixed(3)}, ${data.xpos[i*3+2].toFixed(3)}`);
+    mj.mj_forward(model, data);
+    this.homeQpos = new Float64Array(NUM_ARM_JOINTS);
+    for (let i = 0; i < NUM_ARM_JOINTS; i++) {
+      this.homeQpos[i] = data.qpos[i];
     }
-    for (let i = 0; i < Math.min(model.njnt, 15); i++) {
-      const name = mj.mj_id2name(model, mj.mjtObj.mjOBJ_JOINT.value, i) || "(unnamed)";
-      console.log(`[animator] joint ${i}: ${name}, qposadr: ${model.jnt_qposadr[i]}`);
-    }
+
+    // Show TCP debug point (red dot) at the current TCP position
+    this.updateTcpDebugPoint();
   }
 
   loadTrajectory(trajectory: Trajectory): void {
@@ -98,63 +109,118 @@ export class Animator {
     }
   }
 
+  /** Set a Three.js scene reference so we can add the IK goal marker. */
+  setThreeScene(threeScene: THREE.Scene): void {
+    const geo = new THREE.SphereGeometry(0.015, 16, 16);
+    const mat = new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.6 });
+    this.ikGoalMarker = new THREE.Mesh(geo, mat);
+    this.ikGoalMarker.visible = false;
+    threeScene.add(this.ikGoalMarker);
+  }
+
+  private showIkGoal(pos: Position): void {
+    if (this.ikGoalMarker) {
+      this.ikGoalMarker.position.set(pos.x, pos.y, pos.z);
+      this.ikGoalMarker.visible = true;
+    }
+  }
+
+  private hideIkGoal(): void {
+    if (this.ikGoalMarker) {
+      this.ikGoalMarker.visible = false;
+    }
+  }
+
+  /** Update the mocap body (red dot) to show current TCP position. */
+  updateTcpDebugPoint(): void {
+    const { data } = this.state;
+    if (data.mocap_pos.length >= 3) {
+      const [tx, ty, tz] = this.getTcpPos(data);
+      data.mocap_pos[0] = tx;
+      data.mocap_pos[1] = ty;
+      data.mocap_pos[2] = tz;
+    }
+  }
+
   /**
-   * Numerical IK: iteratively adjust arm joints to move hand toward target.
-   * Works entirely on a qpos copy — does NOT disturb the live sim until we restore.
+   * Get the TCP position (fingertip grasp point) from the hand body.
+   * Applies TCP_Z_OFFSET along the hand's local Z axis.
+   */
+  private getTcpPos(data: any): [number, number, number] {
+    const bi = this.handBodyId * 3;
+    const mi = this.handBodyId * 9;
+    // Hand local Z axis is the 3rd column of xmat (row-major: indices 2, 5, 8)
+    const zx = data.xmat[mi + 2];
+    const zy = data.xmat[mi + 5];
+    const zz = data.xmat[mi + 8];
+    return [
+      data.xpos[bi + 0] + TCP_Z_OFFSET * zx,
+      data.xpos[bi + 1] + TCP_Z_OFFSET * zy,
+      data.xpos[bi + 2] + TCP_Z_OFFSET * zz,
+    ];
+  }
+
+  /**
+   * Numerical IK with TCP offset. Wrist joints locked to home values (no rotation).
+   * Only joints NOT in LOCKED_JOINTS are solved.
    */
   private solveIK(target: Position): Float64Array {
     const { mj, model, data } = this.state;
 
-    // Save full state
     const origQpos = new Float64Array(model.nq);
     for (let i = 0; i < model.nq; i++) origQpos[i] = data.qpos[i];
 
+    // Lock wrist joints to home values
+    const lockedSet = new Set(LOCKED_JOINTS);
+    for (const j of LOCKED_JOINTS) {
+      data.qpos[j] = this.homeQpos[j];
+    }
+
     const perturbDelta = 0.0001;
-    const maxJointStep = 0.1; // max radians per iteration
+    const maxJointStep = 0.1;
 
     for (let iter = 0; iter < IK_MAX_ITER; iter++) {
       mj.mj_forward(model, data);
 
-      const hx = data.xpos[this.handBodyId * 3 + 0];
-      const hy = data.xpos[this.handBodyId * 3 + 1];
-      const hz = data.xpos[this.handBodyId * 3 + 2];
-      const dx = target.x - hx;
-      const dy = target.y - hy;
-      const dz = target.z - hz;
-      const err = Math.sqrt(dx * dx + dy * dy + dz * dz);
-      if (err < IK_TOL) break;
+      const [tcpX, tcpY, tcpZ] = this.getTcpPos(data);
+      const dx = target.x - tcpX;
+      const dy = target.y - tcpY;
+      const dz = target.z - tcpZ;
+      const posErr = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (posErr < IK_TOL) break;
 
-      // Compute full numerical Jacobian (3 x NUM_ARM_JOINTS)
+      // Numerical Jacobian of TCP position — only for unlocked joints
       const Jx = new Float64Array(NUM_ARM_JOINTS);
       const Jy = new Float64Array(NUM_ARM_JOINTS);
       const Jz = new Float64Array(NUM_ARM_JOINTS);
       for (let j = 0; j < NUM_ARM_JOINTS; j++) {
+        if (lockedSet.has(j)) continue; // skip locked joints
         const saved = data.qpos[j];
         data.qpos[j] = saved + perturbDelta;
         mj.mj_forward(model, data);
-        Jx[j] = (data.xpos[this.handBodyId * 3 + 0] - hx) / perturbDelta;
-        Jy[j] = (data.xpos[this.handBodyId * 3 + 1] - hy) / perturbDelta;
-        Jz[j] = (data.xpos[this.handBodyId * 3 + 2] - hz) / perturbDelta;
-        data.qpos[j] = saved; // restore before next column
+        const [ntcpX, ntcpY, ntcpZ] = this.getTcpPos(data);
+        Jx[j] = (ntcpX - tcpX) / perturbDelta;
+        Jy[j] = (ntcpY - tcpY) / perturbDelta;
+        Jz[j] = (ntcpZ - tcpZ) / perturbDelta;
+        data.qpos[j] = saved;
       }
-      // Restore FK to unperturbed state
       mj.mj_forward(model, data);
 
-      // dq = J^T * error (all joints computed, then applied together)
+      // dq = J^T * error (only for unlocked joints)
       const dq = new Float64Array(NUM_ARM_JOINTS);
       for (let j = 0; j < NUM_ARM_JOINTS; j++) {
+        if (lockedSet.has(j)) continue;
         dq[j] = Jx[j] * dx + Jy[j] * dy + Jz[j] * dz;
       }
 
-      // Limit max joint step to prevent divergence
       let maxAbs = 0;
       for (let j = 0; j < NUM_ARM_JOINTS; j++) {
         maxAbs = Math.max(maxAbs, Math.abs(dq[j]));
       }
       const scale = maxAbs > maxJointStep ? maxJointStep / maxAbs : 1.0;
 
-      // Apply step to all joints at once
       for (let j = 0; j < NUM_ARM_JOINTS; j++) {
+        if (lockedSet.has(j)) continue;
         data.qpos[j] += scale * dq[j];
         const lo = model.jnt_range[j * 2 + 0];
         const hi = model.jnt_range[j * 2 + 1];
@@ -162,13 +228,16 @@ export class Animator {
           data.qpos[j] = Math.max(lo, Math.min(hi, data.qpos[j]));
         }
       }
+
+      // Re-enforce locked joints (in case of numerical drift)
+      for (const j of LOCKED_JOINTS) {
+        data.qpos[j] = this.homeQpos[j];
+      }
     }
 
-    // Read result
     const result = new Float64Array(NUM_ARM_JOINTS);
     for (let i = 0; i < NUM_ARM_JOINTS; i++) result[i] = data.qpos[i];
 
-    // Restore original state
     for (let i = 0; i < model.nq; i++) data.qpos[i] = origQpos[i];
     mj.mj_forward(model, data);
 
@@ -189,23 +258,8 @@ export class Animator {
       // Solve IK for target
       this.targetQpos = this.solveIK(wp.position);
 
-      // Verify: check where the hand ends up with the IK solution
-      const { mj, model } = this.state;
-      const savedQ = new Float64Array(model.nq);
-      for (let i = 0; i < model.nq; i++) savedQ[i] = data.qpos[i];
-      for (let i = 0; i < NUM_ARM_JOINTS; i++) data.qpos[i] = this.targetQpos[i];
-      mj.mj_forward(model, data);
-      const hx = data.xpos[this.handBodyId * 3];
-      const hy = data.xpos[this.handBodyId * 3 + 1];
-      const hz = data.xpos[this.handBodyId * 3 + 2];
-      console.log(`[ik] target: (${wp.position.x.toFixed(3)}, ${wp.position.y.toFixed(3)}, ${wp.position.z.toFixed(3)})`);
-      console.log(`[ik] hand at IK solution: (${hx.toFixed(3)}, ${hy.toFixed(3)}, ${hz.toFixed(3)})`);
-      console.log(`[ik] startQpos:`, [...this.startQpos].map(v => v.toFixed(3)));
-      console.log(`[ik] targetQpos:`, [...this.targetQpos].map(v => v.toFixed(3)));
-      for (let i = 0; i < model.nq; i++) data.qpos[i] = savedQ[i];
-      mj.mj_forward(model, data);
-
-      // Move mocap red dot to target
+      // Show IK goal (green dot) and move mocap (red dot) to target
+      this.showIkGoal(wp.position);
       if (data.mocap_pos.length >= 3) {
         data.mocap_pos[0] = wp.position.x;
         data.mocap_pos[1] = wp.position.y;
@@ -271,6 +325,11 @@ export class Animator {
           data.qpos[j] = this.lockedArmQpos[j];
           data.ctrl[j] = this.lockedArmQpos[j];
         }
+      }
+      // Always enforce locked wrist joints
+      for (const j of LOCKED_JOINTS) {
+        data.qpos[j] = this.homeQpos[j];
+        data.ctrl[j] = this.homeQpos[j];
       }
     }
 
