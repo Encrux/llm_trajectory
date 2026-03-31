@@ -164,7 +164,7 @@ function App() {
   }, [scene, config]);
 
   // Execution controls
-  const handlePlay = useCallback(() => animatorRef.current?.play(), []);
+  const handlePlay = useCallback(async () => await animatorRef.current?.play(), []);
   const handlePause = useCallback(() => animatorRef.current?.pause(), []);
   const handleReset = useCallback(() => {
     animatorRef.current?.reset();
@@ -181,7 +181,9 @@ function App() {
     <div className="app-layout">
       <div className="viewport-container">
         <canvas ref={canvasRef} />
-        {loading && <div className="viewport-overlay">Loading MuJoCo...</div>}
+        {loading && <div className="viewport-overlay">Loading MuJoCo + Franka Panda...</div>}
+        {isGenerating && <div className="viewport-overlay">Generating plan...</div>}
+        {animatorStatus === "running" && currentStep === -1 && <div className="viewport-overlay">Computing trajectory...</div>}
         {error && !loading && <div className="viewport-overlay error">{error}</div>}
       </div>
 

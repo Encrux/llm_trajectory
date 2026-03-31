@@ -11,13 +11,13 @@ export interface AnimatorCallbacks {
   onError?: (error: Error) => void;
 }
 
-const FRAMES_PER_MOVE = 180; // ~3s at 60fps — slow and smooth
-const FRAMES_PER_GRIPPER = 200; // Panda gripper actuator is slow — needs ~3s to fully close
+const FRAMES_PER_MOVE = 100; // ~1.7s at 60fps
+const FRAMES_PER_GRIPPER = 90; // ~1.5s for gripper action
 const NUM_ARM_JOINTS = 7;
 
 // IK params
-const IK_MAX_ITER = 300;
-const IK_POS_TOL = 0.003;
+const IK_MAX_ITER = 500;
+const IK_POS_TOL = 0.002;
 const IK_ORI_TOL = 0.01;
 
 // TCP offset: hand body origin → actual fingertip grasp point (meters, in hand-local Z)
@@ -74,41 +74,36 @@ export class Animator {
     this.setStatus("idle");
   }
 
-  play(): void {
+  async play(): Promise<void> {
     if (!this.trajectory || this.trajectory.waypoints.length === 0) return;
     if (this.status === "done") this.currentStep = 0;
 
-    // Pre-compute ALL IK solutions before playback starts
-    this.precomputeIK();
-
     this.setStatus("running");
+    await this.precomputeIK();
     this.prepareStep();
   }
 
-  private precomputeIK(): void {
+  private async precomputeIK(): Promise<void> {
     if (!this.trajectory) return;
     this.ikSolutions.clear();
     const { data } = this.state;
 
-    // Save original qpos
     const origQpos = new Float64Array(this.state.model.nq);
     for (let i = 0; i < this.state.model.nq; i++) origQpos[i] = data.qpos[i];
 
-    // Solve IK for each position waypoint sequentially
-    // (each solve starts from the previous solution's result)
     for (let i = 0; i < this.trajectory.waypoints.length; i++) {
       const wp = this.trajectory.waypoints[i];
       if (wp.position) {
         const solution = this.solveIK(wp.position);
         this.ikSolutions.set(i, solution);
-        // Set qpos to this solution so the next IK starts from here
         for (let j = 0; j < NUM_ARM_JOINTS; j++) {
           data.qpos[j] = solution[j];
         }
+        // Yield to browser between solves so the UI stays responsive
+        await new Promise((r) => setTimeout(r, 0));
       }
     }
 
-    // Restore original qpos
     for (let i = 0; i < this.state.model.nq; i++) data.qpos[i] = origQpos[i];
     this.state.mj.mj_forward(this.state.model, data);
 
@@ -209,9 +204,10 @@ export class Animator {
     for (let i = 0; i < model.nq; i++) origQpos[i] = data.qpos[i];
 
     const perturbDelta = 0.0001;
-    const stepSize = 0.2;
 
     for (let iter = 0; iter < IK_MAX_ITER; iter++) {
+      // Adaptive step size: large initially, small later for precision
+      const stepSize = iter < 150 ? 0.3 : iter < 250 ? 0.1 : 0.03;
       mj.mj_forward(model, data);
 
       // Compute combined cost: position + orientation
@@ -257,6 +253,12 @@ export class Animator {
         }
       }
     }
+
+    // Log final error
+    mj.mj_forward(model, data);
+    const [fx, fy, fz] = this.getTcpPos(data);
+    const fErr = Math.sqrt((target.x-fx)**2 + (target.y-fy)**2 + (target.z-fz)**2);
+    console.log(`[ik] pos_err: ${(fErr*1000).toFixed(1)}mm, ori_err: ${this.getOriCost(data).toFixed(4)}`);
 
     const result = new Float64Array(NUM_ARM_JOINTS);
     for (let i = 0; i < NUM_ARM_JOINTS; i++) result[i] = data.qpos[i];

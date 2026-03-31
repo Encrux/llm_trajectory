@@ -116,9 +116,10 @@ describe("higher-order handlers", () => {
     const result = prim.handler(scene, { target_name: "Bowl" });
     expect(Array.isArray(result)).toBe(true);
     const wps = result as any[];
-    expect(wps.length).toBe(3); // hover, open, lift
+    expect(wps.length).toBe(4); // hover, lower, open, lift
     expect(wps[0].label).toContain("hover");
-    expect(wps[1].gripper).toBe("open");
-    expect(wps[2].label).toContain("lift");
+    expect(wps[1].label).toContain("lower");
+    expect(wps[2].gripper).toBe("open");
+    expect(wps[3].label).toContain("lift");
   });
 });

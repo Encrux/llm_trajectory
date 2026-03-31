@@ -116,9 +116,13 @@ const place: PrimitiveDef = {
     const obj = scene.getObject(name);
     const dropHeight = (params.z_offset as number) ?? 0.08;
     const hover = offsetPosition(obj.position, 0, 0, dropHeight);
+    // Lower gently to just above the target before releasing
+    const releaseHeight = Math.min(dropHeight, 0.03);
+    const release = offsetPosition(obj.position, 0, 0, releaseHeight);
     const liftAway = offsetPosition(obj.position, 0, 0, 0.15);
     return [
       { position: hover, label: `hover_above(${name})` },
+      { position: release, label: `lower_to(${name})` },
       { gripper: "open", label: "open_gripper" },
       { position: liftAway, label: `lift_away(${name})` },
     ];
