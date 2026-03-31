@@ -16,40 +16,53 @@
     <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5" reflectance="0.2"/>
   </asset>
 
+  <!--
+    Friction tuning (MuJoCo friction = sliding torsional rolling):
+    - Table surface:  high sliding friction so fruit doesn't slide around
+    - Fruit objects:  matching high friction for stable resting
+    - Gripper pads:   handled via Panda's fingertip_pad defaults (already high)
+
+    To tune: increase first value (sliding) to reduce sliding,
+    increase second (torsional) to reduce spinning in place,
+    increase third (rolling) to reduce rolling.
+  -->
+
   <worldbody>
     <light pos="0 0 1.5" dir="0 0 -1" directional="true"/>
     <geom name="floor" size="0 0 0.05" type="plane" material="groundplane"/>
 
-    <!-- Table — at Panda's natural working height -->
+    <!-- Table -->
     <body name="table" pos="0.45 0 0.3">
-      <geom name="table_top" type="box" size="0.25 0.35 0.015" rgba="0.6 0.45 0.3 1" mass="100"/>
+      <geom name="table_top" type="box" size="0.25 0.35 0.015" rgba="0.6 0.45 0.3 1"
+            mass="100" friction="0.8 0.02 0.005"/>
       <geom name="leg1" type="cylinder" size="0.02 0.15" pos="0.2 0.3 -0.165" rgba="0.5 0.4 0.25 1"/>
       <geom name="leg2" type="cylinder" size="0.02 0.15" pos="-0.2 0.3 -0.165" rgba="0.5 0.4 0.25 1"/>
       <geom name="leg3" type="cylinder" size="0.02 0.15" pos="0.2 -0.3 -0.165" rgba="0.5 0.4 0.25 1"/>
       <geom name="leg4" type="cylinder" size="0.02 0.15" pos="-0.2 -0.3 -0.165" rgba="0.5 0.4 0.25 1"/>
     </body>
 
-    <!-- Objects on table (z = table_top + half_table_height + half_object_height) -->
+    <!-- Fruit — named geoms so we can reference them in contact pairs -->
     <body name="Banana" pos="0.4 0.1 0.34">
       <freejoint name="Banana_jnt"/>
-      <geom type="capsule" size="0.015 0.04" rgba="1 0.9 0.1 1" mass="0.1"
-            friction="1.5 0.005 0.0001"/>
+      <geom name="banana_geom" type="capsule" size="0.015 0.04" rgba="1 0.9 0.1 1"
+            mass="0.1" friction="0.8 0.02 0.005"/>
     </body>
 
     <body name="Apple" pos="0.5 -0.1 0.34">
       <freejoint name="Apple_jnt"/>
-      <geom type="sphere" size="0.025" rgba="0.9 0.15 0.1 1" mass="0.15"
-            friction="1.5 0.005 0.0001"/>
+      <geom name="apple_geom" type="sphere" size="0.025" rgba="0.9 0.15 0.1 1"
+            mass="0.15" friction="0.8 0.02 0.005"/>
     </body>
 
     <body name="Orange" pos="0.45 -0.15 0.34">
       <freejoint name="Orange_jnt"/>
-      <geom type="sphere" size="0.025" rgba="1.0 0.55 0.1 1" mass="0.12"
-            friction="1.5 0.005 0.0001"/>
+      <geom name="orange_geom" type="sphere" size="0.025" rgba="1.0 0.55 0.1 1"
+            mass="0.12" friction="0.8 0.02 0.005"/>
     </body>
 
     <body name="Bowl" pos="0.55 0.15 0.33">
-      <geom type="cylinder" size="0.05 0.02" rgba="0.92 0.92 0.9 1" mass="0.3"/>
+      <geom name="bowl_geom" type="cylinder" size="0.05 0.02" rgba="0.92 0.92 0.9 1"
+            mass="0.3" friction="0.8 0.02 0.005"/>
     </body>
 
     <!-- Mocap target (red dot) -->

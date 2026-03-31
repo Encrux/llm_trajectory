@@ -71,9 +71,19 @@ function App() {
 
         setLoading(false);
 
+        const SUBSTEPS = 5;
         function animate() {
           if (!mounted) return;
-          // Keep red debug dot at TCP position
+          const { mj: mjLib, model, data } = mujocoRef.current!;
+
+          // Single unified loop: set values → step → re-apply → repeat
+          animatorRef.current?.preStep();
+          for (let i = 0; i < SUBSTEPS; i++) {
+            mjLib.mj_step(model, data);
+            animatorRef.current?.postSubstep();
+          }
+          animatorRef.current?.postFrame();
+
           animatorRef.current?.updateTcpDebugPoint();
           syncVisuals(mujocoRef.current!, vizRef.current!);
           renderThree(rendererRef.current!);

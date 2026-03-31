@@ -13,7 +13,6 @@ export interface AnimatorCallbacks {
 
 const FRAMES_PER_MOVE = 90; // ~1.5s at 60fps
 const FRAMES_PER_GRIPPER = 40;
-const PHYSICS_SUBSTEPS = 5; // mj_step calls per frame
 const NUM_ARM_JOINTS = 7;
 
 // IK params
@@ -36,15 +35,14 @@ export class Animator {
   private totalFrames = 0;
   private status: AnimatorStatus = "idle";
   private callbacks: AnimatorCallbacks;
-  private frameId: number | null = null;
   private gripperActuatorIdx: number;
   private handBodyId: number;
 
   // Joint interpolation
   private startQpos: Float64Array | null = null;
   private targetQpos: Float64Array | null = null;
-  // Locked arm qpos — maintained during gripper/wait steps to prevent drift
-  private lockedArmQpos: Float64Array | null = null;
+  // Pre-computed IK solutions for all position waypoints
+  private ikSolutions: Map<number, Float64Array> = new Map();
   // Home orientation matrix (3x3, row-major) — the desired EE orientation
   private homeOriMat: Float64Array;
   // IK goal marker (Three.js sphere, green)
@@ -79,20 +77,51 @@ export class Animator {
   play(): void {
     if (!this.trajectory || this.trajectory.waypoints.length === 0) return;
     if (this.status === "done") this.currentStep = 0;
+
+    // Pre-compute ALL IK solutions before playback starts
+    this.precomputeIK();
+
     this.setStatus("running");
     this.prepareStep();
-    this.tick();
+  }
+
+  private precomputeIK(): void {
+    if (!this.trajectory) return;
+    this.ikSolutions.clear();
+    const { data } = this.state;
+
+    // Save original qpos
+    const origQpos = new Float64Array(this.state.model.nq);
+    for (let i = 0; i < this.state.model.nq; i++) origQpos[i] = data.qpos[i];
+
+    // Solve IK for each position waypoint sequentially
+    // (each solve starts from the previous solution's result)
+    for (let i = 0; i < this.trajectory.waypoints.length; i++) {
+      const wp = this.trajectory.waypoints[i];
+      if (wp.position) {
+        const solution = this.solveIK(wp.position);
+        this.ikSolutions.set(i, solution);
+        // Set qpos to this solution so the next IK starts from here
+        for (let j = 0; j < NUM_ARM_JOINTS; j++) {
+          data.qpos[j] = solution[j];
+        }
+      }
+    }
+
+    // Restore original qpos
+    for (let i = 0; i < this.state.model.nq; i++) data.qpos[i] = origQpos[i];
+    this.state.mj.mj_forward(this.state.model, data);
+
+    console.log(`[animator] Pre-computed IK for ${this.ikSolutions.size} waypoints`);
   }
 
   pause(): void {
     this.setStatus("paused");
-    this.cancelFrame();
   }
 
   reset(): void {
     this.setStatus("idle");
     this.currentStep = 0;
-    this.cancelFrame();
   }
 
   getStatus(): AnimatorStatus { return this.status; }
@@ -103,12 +132,6 @@ export class Animator {
     this.callbacks.onStatusChange?.(s);
   }
 
-  private cancelFrame(): void {
-    if (this.frameId !== null) {
-      cancelAnimationFrame(this.frameId);
-      this.frameId = null;
-    }
-  }
 
   /** Set a Three.js scene reference so we can add the IK goal marker. */
   setThreeScene(threeScene: THREE.Scene): void {
@@ -235,13 +258,6 @@ export class Animator {
       }
     }
 
-    // Log final IK errors
-    mj.mj_forward(model, data);
-    const [ftx, fty, ftz] = this.getTcpPos(data);
-    const fPosErr = Math.sqrt((target.x-ftx)**2 + (target.y-fty)**2 + (target.z-ftz)**2);
-    const fOriErr = this.getOriCost(data);
-    console.log(`[ik] pos_err: ${fPosErr.toFixed(4)}m, ori_err: ${fOriErr.toFixed(4)}`);
-
     const result = new Float64Array(NUM_ARM_JOINTS);
     for (let i = 0; i < NUM_ARM_JOINTS; i++) result[i] = data.qpos[i];
 
@@ -262,8 +278,8 @@ export class Animator {
       this.startQpos = new Float64Array(NUM_ARM_JOINTS);
       for (let i = 0; i < NUM_ARM_JOINTS; i++) this.startQpos[i] = data.qpos[i];
 
-      // Solve IK for target
-      this.targetQpos = this.solveIK(wp.position);
+      // Use pre-computed IK solution (no blocking solve during playback)
+      this.targetQpos = this.ikSolutions.get(this.currentStep) || this.startQpos;
 
       // Show IK goal (green dot) and move mocap (red dot) to target
       this.showIkGoal(wp.position);
@@ -277,63 +293,68 @@ export class Animator {
       this.framesRemaining = FRAMES_PER_MOVE;
     } else if (wp.gripper) {
       data.ctrl[this.gripperActuatorIdx] = wp.gripper === "open" ? 255 : 0;
-      // Lock arm at current position during gripper action
+      // Hold arm via actuators only (no kinematic override)
       this.startQpos = null;
       this.targetQpos = null;
-      this.lockCurrentArmQpos();
+      this.holdArm();
       this.totalFrames = FRAMES_PER_GRIPPER;
       this.framesRemaining = FRAMES_PER_GRIPPER;
     } else if (wp.wait !== undefined) {
       this.startQpos = null;
       this.targetQpos = null;
-      this.lockCurrentArmQpos();
+      this.holdArm();
       this.totalFrames = Math.round(wp.wait * 60);
       this.framesRemaining = this.totalFrames;
     }
   }
 
-  private lockCurrentArmQpos(): void {
+  /** Set arm actuator targets to hold current position and zero arm velocity. */
+  private holdArm(): void {
     const { data } = this.state;
-    this.lockedArmQpos = new Float64Array(NUM_ARM_JOINTS);
     for (let i = 0; i < NUM_ARM_JOINTS; i++) {
-      this.lockedArmQpos[i] = data.qpos[i];
+      data.ctrl[i] = data.qpos[i];
+      data.qvel[i] = 0;
     }
   }
 
-  private tick = (): void => {
+  /**
+   * Called by the render loop each frame BEFORE mj_step.
+   * Sets arm qpos/ctrl for kinematic control.
+   */
+  preStep(): void {
     if (this.status !== "running" || !this.trajectory) return;
-    const { mj, model, data } = this.state;
+    const { data } = this.state;
 
-    // Interpolate arm qpos directly (kinematic control)
     if (this.startQpos && this.targetQpos) {
       const t = 1 - this.framesRemaining / this.totalFrames;
       const s = smoothstep(t);
       for (let j = 0; j < NUM_ARM_JOINTS; j++) {
         data.qpos[j] = this.startQpos[j] + (this.targetQpos[j] - this.startQpos[j]) * s;
-        // Also update ctrl so actuators track (prevents drift after step)
         data.ctrl[j] = data.qpos[j];
       }
     }
+  }
 
-    // Step physics (for object dynamics, gripper actuation)
-    for (let i = 0; i < PHYSICS_SUBSTEPS; i++) {
-      mj.mj_step(model, data);
-      // Re-apply arm qpos after each substep (kinematic override)
-      if (this.startQpos && this.targetQpos) {
-        const t = 1 - this.framesRemaining / this.totalFrames;
-        const s = smoothstep(t);
-        for (let j = 0; j < NUM_ARM_JOINTS; j++) {
-          data.qpos[j] = this.startQpos[j] + (this.targetQpos[j] - this.startQpos[j]) * s;
-          data.ctrl[j] = data.qpos[j];
-        }
-      } else if (this.lockedArmQpos) {
-        // During gripper/wait steps: hold arm in place
-        for (let j = 0; j < NUM_ARM_JOINTS; j++) {
-          data.qpos[j] = this.lockedArmQpos[j];
-          data.ctrl[j] = this.lockedArmQpos[j];
-        }
+  /**
+   * Called AFTER each mj_step substep to re-apply arm qpos (kinematic override).
+   */
+  postSubstep(): void {
+    if (this.status !== "running") return;
+    const { data } = this.state;
+    if (this.startQpos && this.targetQpos) {
+      const t = 1 - this.framesRemaining / this.totalFrames;
+      const s = smoothstep(t);
+      for (let j = 0; j < NUM_ARM_JOINTS; j++) {
+        data.qpos[j] = this.startQpos[j] + (this.targetQpos[j] - this.startQpos[j]) * s;
       }
     }
+  }
+
+  /**
+   * Called once per render frame AFTER all substeps. Advances waypoint timing.
+   */
+  postFrame(): void {
+    if (this.status !== "running" || !this.trajectory) return;
 
     this.framesRemaining--;
 
@@ -346,9 +367,7 @@ export class Animator {
       }
       this.prepareStep();
     }
-
-    this.frameId = requestAnimationFrame(this.tick);
-  };
+  }
 }
 
 function smoothstep(t: number): number {
