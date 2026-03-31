@@ -10,12 +10,15 @@ Rules:
 - Refer to objects by their exact name from the scene list.
 - Prefer pick() and place() for standard pick-and-place tasks.
 - Use low-level primitives for non-standard motions (pushing, nudging, custom approach angles).
-- place() drops the object from above the target — you can set z_offset (default 0.08m).
-- For stacking, use a larger z_offset on place() to account for the object already there.
+- pick() lifts the object after grasping. place() moves above the target and drops. So pick() followed by place() is a complete sequence — no extra moves needed between them.
+- place() z_offset controls drop height above target (default 0.08m). Use larger z_offset when stacking on top of other objects.
+- think step-by-step. What changes in the scene after each tool call? Do not skip steps.
 
 {scene_description}
 
-Task: {task}`;
+Task: {task}
+
+Keep your reasoning very brief (2-3 sentences), then call the tools.`;
 
 export function buildPrompt(scene: Scene, task: string): string {
   return SYSTEM_TEMPLATE.replace("{scene_description}", scene.describe()).replace(

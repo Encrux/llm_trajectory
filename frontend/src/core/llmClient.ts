@@ -5,7 +5,7 @@ export async function callLLM(
   tools: object[],
   config: ApiConfig,
 ): Promise<ToolCall[]> {
-  const body = {
+  const body: Record<string, unknown> = {
     model: config.model,
     messages: [
       { role: "system", content: systemPrompt },
@@ -38,8 +38,9 @@ export async function callLLM(
 
   const data = await response.json();
   const message = data.choices?.[0]?.message;
-
-  if (!message?.tool_calls) {
+  console.log("[llm] response:", JSON.stringify(message, null, 2));
+  if (!message?.tool_calls || message.tool_calls.length === 0) {
+    console.warn("[llm] No tool calls in response. Content:", message?.content || message?.reasoning);
     return [];
   }
 

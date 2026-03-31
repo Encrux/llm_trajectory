@@ -9,9 +9,12 @@ export function ScenePanel({ scene }: { scene: Scene | null }) {
       <ul className="scene-objects">
         {scene.objects.map((o) => (
           <li key={o.name}>
-            <span>{o.name}</span>
+            <div>
+              <span>{o.name}</span>
+              {o.shape && <span className="scene-shape"> {o.shape}</span>}
+            </div>
             <span className="coords">
-              {o.position.x.toFixed(2)}, {o.position.y.toFixed(2)}, {o.position.z.toFixed(2)}
+              {o.size || `${o.position.x.toFixed(2)}, ${o.position.y.toFixed(2)}, ${o.position.z.toFixed(2)}`}
             </span>
           </li>
         ))}

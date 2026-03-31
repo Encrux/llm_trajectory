@@ -44,40 +44,47 @@
       <geom name="leg4" type="cylinder" size="0.02 0.15" pos="-0.2 -0.3 -0.165" rgba="0.5 0.4 0.25 1"/>
     </body>
 
-    <!-- Fruit — named geoms so we can reference them in contact pairs -->
-    <body name="Banana" pos="0.4 0.1 0.35">
-      <freejoint name="Banana_jnt" />
-      <geom name="banana_geom" type="capsule" size="0.015 0.04" rgba="1 0.9 0.1 1"
-            mass="0.1" friction="2.0 0.3 0.1" condim="6"/>
+    <!-- Bowl — isolated in the back-right corner -->
+    <body name="Bowl" pos="0.6 0.25 0.33">
+      <geom name="bowl_geom" type="cylinder" size="0.05 0.02" rgba="0.92 0.92 0.9 1"
+            mass="0.3" friction="1.0 0.1 0.1"/>
     </body>
 
-    <body name="Apple" pos="0.5 -0.1 0.36">
+    <!-- Objects — spread out, away from bowl -->
+    <body name="Apple" pos="0.3 0.2 0.341">
       <freejoint name="Apple_jnt" />
       <geom name="apple_geom" type="sphere" size="0.025" rgba="0.9 0.15 0.1 1"
             mass="0.15" friction="2.0 0.3 0.1" condim="6"/>
     </body>
 
-    <body name="Orange" pos="0.45 -0.15 0.36">
+    <body name="Orange" pos="0.55 -0.2 0.341">
       <freejoint name="Orange_jnt" />
       <geom name="orange_geom" type="sphere" size="0.025" rgba="1.0 0.55 0.1 1"
             mass="0.12" friction="2.0 0.3 0.1" condim="6"/>
     </body>
 
-    <body name="Red Cube" pos="0.35 -0.05 0.34">
+    <body name="Red Cube" pos="0.35 -0.15 0.336">
       <freejoint name="RedCube_jnt" />
       <geom name="red_cube_geom" type="box" size="0.02 0.02 0.02" rgba="0.85 0.15 0.15 1"
             mass="0.08" friction="2.0 0.3 0.1" condim="6"/>
     </body>
 
-    <body name="Blue Cube" pos="0.55 -0.05 0.34">
+    <body name="Blue Cube" pos="0.45 0.1 0.336">
       <freejoint name="BlueCube_jnt" />
       <geom name="blue_cube_geom" type="box" size="0.02 0.02 0.02" rgba="0.15 0.3 0.85 1"
             mass="0.08" friction="2.0 0.3 0.1" condim="6"/>
     </body>
 
-    <body name="Bowl" pos="0.55 0.15 0.33">
-      <geom name="bowl_geom" type="cylinder" size="0.05 0.02" rgba="0.92 0.92 0.9 1"
-            mass="0.3" friction="1.0 0.1 0.1"/>
+    <body name="Green Cylinder" pos="0.3 -0.05 0.336">
+      <freejoint name="GreenCyl_jnt" />
+      <geom name="green_cyl_geom" type="cylinder" size="0.015 0.02" rgba="0.2 0.75 0.3 1"
+            mass="0.06" friction="2.0 0.3 0.1" condim="6"/>
+    </body>
+
+    <body name="Yellow Cylinder" pos="0.5 -0.1 0.336">
+      <freejoint name="YellowCyl_jnt" />
+      <geom name="yellow_cyl_geom" type="cylinder" size="0.015 0.02" rgba="0.95 0.85 0.1 1"
+            mass="0.06" friction="2.0 0.3 0.1" condim="6"/>
     </body>
 
     <!-- Mocap target (red dot) -->

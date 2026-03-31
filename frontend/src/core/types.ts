@@ -19,6 +19,8 @@ export interface SceneObject {
   readonly name: string;
   readonly position: Position;
   readonly category?: string;
+  readonly shape?: string; // "sphere", "box", "cylinder", "capsule"
+  readonly size?: string; // human-readable, e.g. "5cm diameter", "4×4×4cm"
   readonly properties?: Record<string, string>;
   readonly mujocoBodyId?: number;
 }
