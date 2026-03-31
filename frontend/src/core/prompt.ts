@@ -8,10 +8,18 @@ Rules:
 - Always approach from above first (use move_to_point_offset with z_offset=0.1 or 0.15).
 - Open the gripper BEFORE lowering to pick up an object.
 - After grasping, lift up before moving laterally.
-- To place, move above target, lower, open gripper, then lift away.
+- When placing or stacking: NEVER move_to_point directly on the target. Instead use move_to_point_offset with z_offset=0.05 to hover above the target, then open the gripper to drop the object. The held object has size, so going to the target's exact position would collide.
+- After releasing, lift away with move_to_point_offset z_offset=0.15.
 
-A typical pick-and-place sequence uses 9 tool calls:
-approach above object → open gripper → lower to object → close gripper → lift up → move above target → lower to target → open gripper → lift away
+A typical pick-and-place sequence:
+1. move_to_point_offset(object, z=0.1) — approach above
+2. open_gripper — prepare to grab
+3. move_to_point(object) — lower to object
+4. close_gripper — grab
+5. move_to_point_offset(object, z=0.15) — lift
+6. move_to_point_offset(target, z=0.08) — hover above target
+7. open_gripper — drop
+8. move_to_point_offset(target, z=0.15) — lift away
 
 {scene_description}
 
@@ -25,4 +33,4 @@ export function buildPrompt(scene: Scene, task: string): string {
 }
 
 export const SUGGESTED_PROMPT =
-  "Pick up the banana and place it in the bowl";
+  "Pick up the red cube and place it on the bowl";
