@@ -78,12 +78,25 @@ function App() {
           const { mj: mjLib, model, data } = mujocoRef.current!;
 
           // Single unified loop: set values → step → re-apply → repeat
-          animatorRef.current?.preStep();
-          for (let i = 0; i < SUBSTEPS; i++) {
-            mjLib.mj_step(model, data);
-            animatorRef.current?.postSubstep();
+          const isRunning = animatorRef.current?.getStatus() === "running";
+
+          // Check if all objects have settled (skip stepping if so)
+          let maxVel = 0;
+          if (!isRunning) {
+            for (let i = 0; i < model.nv; i++) {
+              maxVel = Math.max(maxVel, Math.abs(data.qvel[i]));
+            }
           }
-          animatorRef.current?.postFrame();
+
+          // Only step physics if animator is running OR objects are still moving
+          if (isRunning || maxVel > 0.01) {
+            animatorRef.current?.preStep();
+            for (let i = 0; i < SUBSTEPS; i++) {
+              mjLib.mj_step(model, data);
+              animatorRef.current?.postSubstep();
+            }
+            animatorRef.current?.postFrame();
+          }
 
           animatorRef.current?.updateTcpDebugPoint();
           syncVisuals(mujocoRef.current!, vizRef.current!);
