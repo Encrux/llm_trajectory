@@ -11,8 +11,8 @@ export interface AnimatorCallbacks {
   onError?: (error: Error) => void;
 }
 
-const FRAMES_PER_MOVE = 90; // ~1.5s at 60fps
-const FRAMES_PER_GRIPPER = 40;
+const FRAMES_PER_MOVE = 180; // ~3s at 60fps — slow and smooth
+const FRAMES_PER_GRIPPER = 200; // Panda gripper actuator is slow — needs ~3s to fully close
 const NUM_ARM_JOINTS = 7;
 
 // IK params
@@ -281,6 +281,7 @@ export class Animator {
       // Use pre-computed IK solution (no blocking solve during playback)
       this.targetQpos = this.ikSolutions.get(this.currentStep) || this.startQpos;
 
+      console.log(`[move] step ${this.currentStep}, gripper ctrl=${data.ctrl[this.gripperActuatorIdx]}, finger qpos: ${data.qpos[7].toFixed(4)}, ${data.qpos[8].toFixed(4)}`);
       // Show IK goal (green dot) and move mocap (red dot) to target
       this.showIkGoal(wp.position);
       if (data.mocap_pos.length >= 3) {
@@ -293,6 +294,7 @@ export class Animator {
       this.framesRemaining = FRAMES_PER_MOVE;
     } else if (wp.gripper) {
       data.ctrl[this.gripperActuatorIdx] = wp.gripper === "open" ? 255 : 0;
+      console.log(`[gripper] ${wp.gripper}, ctrl=${data.ctrl[this.gripperActuatorIdx]}, finger qpos: ${data.qpos[7].toFixed(4)}, ${data.qpos[8].toFixed(4)}`);
       // Hold arm via actuators only (no kinematic override)
       this.startQpos = null;
       this.targetQpos = null;
@@ -319,7 +321,7 @@ export class Animator {
 
   /**
    * Called by the render loop each frame BEFORE mj_step.
-   * Sets arm qpos/ctrl for kinematic control.
+   * Sets arm ctrl targets — physics drives the arm (no kinematic override).
    */
   preStep(): void {
     if (this.status !== "running" || !this.trajectory) return;
@@ -329,25 +331,17 @@ export class Animator {
       const t = 1 - this.framesRemaining / this.totalFrames;
       const s = smoothstep(t);
       for (let j = 0; j < NUM_ARM_JOINTS; j++) {
-        data.qpos[j] = this.startQpos[j] + (this.targetQpos[j] - this.startQpos[j]) * s;
-        data.ctrl[j] = data.qpos[j];
+        // Set actuator target — let physics move the arm (preserves contacts)
+        data.ctrl[j] = this.startQpos[j] + (this.targetQpos[j] - this.startQpos[j]) * s;
       }
     }
   }
 
   /**
-   * Called AFTER each mj_step substep to re-apply arm qpos (kinematic override).
+   * Called AFTER each mj_step substep. No-op now (no kinematic override).
    */
   postSubstep(): void {
-    if (this.status !== "running") return;
-    const { data } = this.state;
-    if (this.startQpos && this.targetQpos) {
-      const t = 1 - this.framesRemaining / this.totalFrames;
-      const s = smoothstep(t);
-      for (let j = 0; j < NUM_ARM_JOINTS; j++) {
-        data.qpos[j] = this.startQpos[j] + (this.targetQpos[j] - this.startQpos[j]) * s;
-      }
-    }
+    // Physics handles everything — arm moves via actuators, contacts preserved
   }
 
   /**
