@@ -22,8 +22,8 @@ describe("buildPrompt", () => {
 
   it("includes instructions", () => {
     const prompt = buildPrompt(scene, "test");
-    expect(prompt).toContain("Do NOT invent coordinates");
-    expect(prompt).toContain("pick-and-place");
+    expect(prompt).toContain("pick()");
+    expect(prompt).toContain("place()");
   });
 });
 

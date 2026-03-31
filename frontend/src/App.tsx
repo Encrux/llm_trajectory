@@ -5,7 +5,7 @@ import { buildVisuals, syncVisuals, type VisualizerState } from "./sim/mujocoVis
 import { extractScene } from "./sim/sceneExtractor";
 import { Animator, type AnimatorStatus } from "./sim/animator";
 import { Scene } from "./core/scene";
-import type { ApiConfig, ToolCall, Trajectory } from "./core/types";
+import type { ApiConfig, ToolCall, Trajectory, WaypointGroup } from "./core/types";
 import { buildPrompt } from "./core/prompt";
 import { toOpenAITools } from "./core/primitives";
 import { callLLM } from "./core/llmClient";
@@ -33,6 +33,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [scene, setScene] = useState<Scene | null>(null);
   const [plan, setPlan] = useState<ToolCall[] | null>(null);
+  const [groups, setGroups] = useState<WaypointGroup[] | null>(null);
   const [trajectory, setTrajectory] = useState<Trajectory | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [animatorStatus, setAnimatorStatus] = useState<AnimatorStatus>("idle");
@@ -122,6 +123,7 @@ function App() {
     setIsGenerating(true);
     setError(null);
     setPlan(null);
+    setGroups(null);
     setTrajectory(null);
     setCurrentStep(-1);
     setAnimatorStatus("idle");
@@ -133,9 +135,9 @@ function App() {
       setPlan(toolCalls);
 
       if (toolCalls.length > 0) {
-        // Re-extract scene (objects may have moved from previous run)
         const currentScene = extractScene(mujocoRef.current!);
         const traj = transpile(toolCalls, currentScene);
+        setGroups([...traj.groups]);
         setTrajectory(traj);
 
         // Load into animator
@@ -184,7 +186,7 @@ function App() {
           isGenerating={isGenerating}
           disabled={loading || !scene}
         />
-        <PlanView plan={plan} currentStep={currentStep} />
+        <PlanView groups={groups} currentWaypointIndex={currentStep} />
         <ExecutionControls
           status={animatorStatus}
           onPlay={handlePlay}

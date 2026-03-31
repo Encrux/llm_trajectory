@@ -35,8 +35,17 @@ export interface Waypoint {
   readonly label: string;
 }
 
+/** A group of waypoints produced by a higher-order primitive (pick, place, etc.) */
+export interface WaypointGroup {
+  readonly label: string; // e.g. "pick(Apple)"
+  readonly toolCall: ToolCall; // the original high-level tool call
+  readonly waypoints: readonly Waypoint[];
+}
+
 export interface Trajectory {
   readonly metadata: Record<string, unknown>;
+  readonly groups: readonly WaypointGroup[];
+  /** Flat list of all waypoints (for animator) */
   readonly waypoints: readonly Waypoint[];
 }
 
@@ -48,10 +57,11 @@ export interface PrimitiveDef {
     readonly properties: Record<string, { type: string; description?: string }>;
     readonly required: readonly string[];
   };
+  /** Returns one waypoint (atomic) or multiple (higher-order) */
   readonly handler: (
     scene: Scene,
     params: Record<string, unknown>,
-  ) => Waypoint;
+  ) => Waypoint | Waypoint[];
 }
 
 export interface ApiConfig {

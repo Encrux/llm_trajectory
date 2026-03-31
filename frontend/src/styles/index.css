@@ -177,38 +177,92 @@ body {
 }
 
 /* Plan View */
-.plan-steps {
-  list-style: none;
-  font-size: 0.82rem;
-  font-family: monospace;
-}
-
-.plan-steps li {
-  padding: 4px 8px;
-  border-radius: 4px;
-  margin-bottom: 2px;
-  display: flex;
-  gap: 8px;
-}
-
-.plan-steps li .step-idx {
-  color: #666;
-  min-width: 20px;
-}
-
-.plan-steps li.active {
-  background: #533483;
-  color: white;
-}
-
-.plan-steps li.completed {
-  color: #666;
-}
-
 .plan-empty {
   color: #555;
   font-size: 0.82rem;
   font-style: italic;
+}
+
+.plan-groups {
+  font-size: 0.82rem;
+  font-family: monospace;
+}
+
+.plan-group {
+  margin-bottom: 2px;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.plan-group.active > .plan-group-header {
+  background: #533483;
+  color: white;
+}
+
+.plan-group.done > .plan-group-header {
+  color: #666;
+}
+
+.plan-group-header {
+  padding: 5px 8px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  border-radius: 4px;
+}
+
+.plan-group-header.expandable {
+  cursor: pointer;
+}
+
+.plan-group-header.expandable:hover {
+  background: rgba(83, 52, 131, 0.3);
+}
+
+.plan-group-header .step-idx {
+  color: #888;
+  min-width: 18px;
+}
+
+.plan-group-header .expand-icon {
+  color: #888;
+  font-size: 0.7rem;
+  width: 10px;
+}
+
+.plan-group-header .step-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plan-group-header .step-count {
+  color: #666;
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+
+.plan-substeps {
+  padding: 2px 0 4px 28px;
+  border-left: 2px solid #0f3460;
+  margin-left: 14px;
+}
+
+.plan-substep {
+  padding: 2px 8px;
+  font-size: 0.75rem;
+  color: #999;
+  border-radius: 3px;
+}
+
+.plan-substep.active {
+  background: rgba(83, 52, 131, 0.5);
+  color: white;
+}
+
+.plan-substep.done {
+  color: #555;
 }
 
 /* Execution Controls */
