@@ -132,9 +132,9 @@ async function buildMergedScene(): Promise<string> {
     .replace(/<\/mujoco>/, "")
     // Fix meshdir: scene.xml is at /working/, meshes are at /working/franka_emika_panda/assets/
     .replace('meshdir="assets"', 'meshdir="franka_emika_panda/assets"')
-    // Boost gripper 3x
-    .replace('forcerange="-100 100" ctrlrange="0 255"', 'forcerange="-300 300" ctrlrange="0 255"')
-    .replace('gainprm="0.01568627451 0 0" biasprm="0 -100 -10"', 'gainprm="0.04705882353 0 0" biasprm="0 -300 -30"')
+    // Boost gripper 4x
+    .replace('forcerange="-100 100" ctrlrange="0 255"', 'forcerange="-400 400" ctrlrange="0 255"')
+    .replace('gainprm="0.01568627451 0 0" biasprm="0 -100 -10"', 'gainprm="0.06274509804 0 0" biasprm="0 -400 -40"')
     .trim();
 
   // Replace the <include> tag in scene.xml with the panda content

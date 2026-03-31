@@ -104,11 +104,11 @@ describe("higher-order handlers", () => {
     const result = prim.handler(scene, { object_name: "Banana" });
     expect(Array.isArray(result)).toBe(true);
     const wps = result as any[];
-    expect(wps.length).toBe(5); // approach, open, lower, close, lift
+    expect(wps.length).toBe(8); // approach, settle, open, lower, settle, close, settle, lift
     expect(wps[0].label).toContain("approach");
-    expect(wps[1].gripper).toBe("open");
-    expect(wps[3].gripper).toBe("close");
-    expect(wps[4].label).toContain("lift");
+    expect(wps[2].gripper).toBe("open");
+    expect(wps[5].gripper).toBe("close");
+    expect(wps[7].label).toContain("lift");
   });
 
   it("place returns multiple waypoints", () => {
@@ -116,10 +116,10 @@ describe("higher-order handlers", () => {
     const result = prim.handler(scene, { target_name: "Bowl" });
     expect(Array.isArray(result)).toBe(true);
     const wps = result as any[];
-    expect(wps.length).toBe(4); // hover, lower, open, lift
-    expect(wps[0].label).toContain("hover");
-    expect(wps[1].label).toContain("lower");
-    expect(wps[2].gripper).toBe("open");
-    expect(wps[3].label).toContain("lift");
+    expect(wps.length).toBe(7); // hover, settle, lower, settle, open, settle, lift
+    expect(wps[0].label).toContain("approach");
+    expect(wps[2].label).toContain("lower");
+    expect(wps[4].gripper).toBe("open");
+    expect(wps[6].label).toContain("lift");
   });
 });

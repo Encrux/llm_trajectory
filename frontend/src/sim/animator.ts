@@ -11,8 +11,8 @@ export interface AnimatorCallbacks {
   onError?: (error: Error) => void;
 }
 
-const FRAMES_PER_MOVE = 100; // ~1.7s at 60fps
-const FRAMES_PER_GRIPPER = 90; // ~1.5s for gripper action
+const FRAMES_PER_MOVE = 120; // ~2s at 60fps
+const FRAMES_PER_GRIPPER = 45; // ~0.75s for gripper action
 const NUM_ARM_JOINTS = 7;
 
 // IK params
@@ -41,6 +41,10 @@ export class Animator {
   // Joint interpolation
   private startQpos: Float64Array | null = null;
   private targetQpos: Float64Array | null = null;
+  // Held arm position during non-move steps (gripper/wait)
+  private heldQpos: Float64Array | null = null;
+  // Track if gripper is closed (holding object) — affects move control strategy
+  private gripperClosed = false;
   // Pre-computed IK solutions for all position waypoints
   private ikSolutions: Map<number, Float64Array> = new Map();
   // Home orientation matrix (3x3, row-major) — the desired EE orientation
@@ -78,8 +82,10 @@ export class Animator {
     if (!this.trajectory || this.trajectory.waypoints.length === 0) return;
     if (this.status === "done") this.currentStep = 0;
 
-    this.setStatus("running");
+    // Compute IK BEFORE setting status to running (prevents race with render loop)
+    this.setStatus("idle");
     await this.precomputeIK();
+    this.setStatus("running");
     this.prepareStep();
   }
 
@@ -296,17 +302,19 @@ export class Animator {
       this.framesRemaining = FRAMES_PER_MOVE;
     } else if (wp.gripper) {
       data.ctrl[this.gripperActuatorIdx] = wp.gripper === "open" ? 255 : 0;
-      console.log(`[gripper] ${wp.gripper}, ctrl=${data.ctrl[this.gripperActuatorIdx]}, finger qpos: ${data.qpos[7].toFixed(4)}, ${data.qpos[8].toFixed(4)}`);
-      // Hold arm via actuators only (no kinematic override)
+      this.gripperClosed = wp.gripper === "close";
+      // Hold arm at current position
       this.startQpos = null;
       this.targetQpos = null;
-      this.holdArm();
+      this.heldQpos = new Float64Array(NUM_ARM_JOINTS);
+      for (let i = 0; i < NUM_ARM_JOINTS; i++) this.heldQpos[i] = data.qpos[i];
       this.totalFrames = FRAMES_PER_GRIPPER;
       this.framesRemaining = FRAMES_PER_GRIPPER;
     } else if (wp.wait !== undefined) {
       this.startQpos = null;
       this.targetQpos = null;
-      this.holdArm();
+      this.heldQpos = new Float64Array(NUM_ARM_JOINTS);
+      for (let i = 0; i < NUM_ARM_JOINTS; i++) this.heldQpos[i] = data.qpos[i];
       this.totalFrames = Math.round(wp.wait * 60);
       this.framesRemaining = this.totalFrames;
     }
@@ -323,7 +331,7 @@ export class Animator {
 
   /**
    * Called by the render loop each frame BEFORE mj_step.
-   * Sets arm ctrl targets — physics drives the arm (no kinematic override).
+   * Kinematically sets arm qpos + ctrl for precise positioning.
    */
   preStep(): void {
     if (this.status !== "running" || !this.trajectory) return;
@@ -333,17 +341,31 @@ export class Animator {
       const t = 1 - this.framesRemaining / this.totalFrames;
       const s = smoothstep(t);
       for (let j = 0; j < NUM_ARM_JOINTS; j++) {
-        // Set actuator target — let physics move the arm (preserves contacts)
-        data.ctrl[j] = this.startQpos[j] + (this.targetQpos[j] - this.startQpos[j]) * s;
+        const val = this.startQpos[j] + (this.targetQpos[j] - this.startQpos[j]) * s;
+        if (this.gripperClosed) {
+          // Holding object: actuator-only (preserves contact physics)
+          data.ctrl[j] = val;
+        } else {
+          // Not holding: kinematic (precise positioning)
+          data.qpos[j] = val;
+          data.ctrl[j] = val;
+        }
+      }
+    } else if (this.heldQpos) {
+      // Gripper/wait step: hold arm via ctrl
+      for (let j = 0; j < NUM_ARM_JOINTS; j++) {
+        data.ctrl[j] = this.heldQpos[j];
       }
     }
   }
 
   /**
-   * Called AFTER each mj_step substep. No-op now (no kinematic override).
+   * Called AFTER each mj_step substep.
+   * No kinematic override — let physics handle contacts naturally.
+   * preStep already set qpos+ctrl before the first substep.
    */
   postSubstep(): void {
-    // Physics handles everything — arm moves via actuators, contacts preserved
+    // intentionally empty — overriding qpos after mj_step breaks contact physics
   }
 
   /**

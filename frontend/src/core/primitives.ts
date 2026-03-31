@@ -88,13 +88,16 @@ const pick: PrimitiveDef = {
   handler: (scene, params): Waypoint[] => {
     const name = params.object_name as string;
     const obj = scene.getObject(name);
-    const above = offsetPosition(obj.position, 0, 0, 0.12);
+    const above = offsetPosition(obj.position, 0, 0, 0.10);
     const lift = offsetPosition(obj.position, 0, 0, 0.15);
     return [
       { position: above, label: `approach_above(${name})` },
+      { wait: 0.3, label: "settle" },
       { gripper: "open", label: "open_gripper" },
       { position: obj.position, label: `lower_to(${name})` },
+      { wait: 0.3, label: "settle" },
       { gripper: "close", label: "close_gripper" },
+      { wait: 0.3, label: "settle" },
       { position: lift, label: `lift(${name})` },
     ];
   },
@@ -115,15 +118,18 @@ const place: PrimitiveDef = {
     const name = params.target_name as string;
     const obj = scene.getObject(name);
     const dropHeight = (params.z_offset as number) ?? 0.08;
-    const hover = offsetPosition(obj.position, 0, 0, dropHeight);
-    // Lower gently to just above the target before releasing
-    const releaseHeight = Math.min(dropHeight, 0.03);
+    // First get directly above the target (high), then lower straight down
+    const approachHigh = offsetPosition(obj.position, 0, 0, 0.15);
+    const releaseHeight = Math.min(dropHeight, 0.04);
     const release = offsetPosition(obj.position, 0, 0, releaseHeight);
     const liftAway = offsetPosition(obj.position, 0, 0, 0.15);
     return [
-      { position: hover, label: `hover_above(${name})` },
+      { position: approachHigh, label: `approach_above(${name})` },
+      { wait: 0.3, label: "settle" },
       { position: release, label: `lower_to(${name})` },
-      { gripper: "open", label: "open_gripper" },
+      { wait: 0.2, label: "settle" },
+      { gripper: "open", label: "release" },
+      { wait: 0.2, label: "settle" },
       { position: liftAway, label: `lift_away(${name})` },
     ];
   },
