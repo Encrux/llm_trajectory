@@ -203,6 +203,7 @@ function App() {
       const prompt = buildPrompt(scene, task);
       const tools = toOpenAITools();
       const toolCalls = await callLLM(prompt, tools, config);
+      (window as any).umami?.track("generate-plan", { task });
       setPlan(toolCalls);
 
       if (toolCalls.length > 0) {
@@ -224,6 +225,7 @@ function App() {
   // Execution controls
   const handlePlay = useCallback(async () => {
     if (window.innerWidth <= 768) setSidebarOpen(false);
+    (window as any).umami?.track("play-trajectory");
     await animatorRef.current?.play();
   }, []);
   const handlePause = useCallback(() => animatorRef.current?.pause(), []);
@@ -268,6 +270,7 @@ function App() {
                 if (showHint) {
                   setShowHint(false);
                   localStorage.setItem("llm-traj-visited", "1");
+                  (window as any).umami?.track("sidebar-discovered");
                 }
               }
             }}
@@ -314,6 +317,7 @@ function App() {
             if (showHint) {
               setShowHint(false);
               localStorage.setItem("llm-traj-visited", "1");
+              (window as any).umami?.track("sidebar-discovered");
             }
           }}
           onMouseDown={(e) => {

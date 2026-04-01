@@ -24,7 +24,10 @@ export function TaskInput({ onGenerate, isGenerating, disabled }: Props) {
           <button
             key={ex.label}
             className={`chip ${task === ex.prompt ? "active" : ""}`}
-            onClick={() => setTask(ex.prompt)}
+            onClick={() => {
+              setTask(ex.prompt);
+              (window as any).umami?.track("example-chip", { label: ex.label });
+            }}
             disabled={isGenerating}
           >
             {ex.label}
