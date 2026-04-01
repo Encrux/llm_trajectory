@@ -279,6 +279,41 @@ body {
   font-style: italic;
 }
 
+/* Example chips */
+.example-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.chip {
+  padding: 4px 10px;
+  border: 1px solid #0f3460;
+  border-radius: 12px;
+  background: transparent;
+  color: #999;
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.chip:hover:not(:disabled) {
+  border-color: #533483;
+  color: #ccc;
+}
+
+.chip.active {
+  border-color: #533483;
+  background: rgba(83, 52, 131, 0.2);
+  color: #ccc;
+}
+
+.chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Task Input */
 .task-input textarea {
   width: 100%;

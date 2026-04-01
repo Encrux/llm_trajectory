@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { SUGGESTED_PROMPT } from "../core/prompt";
 
+const EXAMPLES = [
+  { label: "Pick & place", prompt: SUGGESTED_PROMPT },
+  { label: "Sort by shape", prompt: "Put all the cubes on the plate" },
+  { label: "Stack", prompt: "Stack the red cube on top of the blue cube" },
+];
+
 interface Props {
   onGenerate: (task: string) => void;
   isGenerating: boolean;
@@ -13,6 +19,18 @@ export function TaskInput({ onGenerate, isGenerating, disabled }: Props) {
   return (
     <div className="panel task-input">
       <h2>Task</h2>
+      <div className="example-chips">
+        {EXAMPLES.map((ex) => (
+          <button
+            key={ex.label}
+            className={`chip ${task === ex.prompt ? "active" : ""}`}
+            onClick={() => setTask(ex.prompt)}
+            disabled={isGenerating}
+          >
+            {ex.label}
+          </button>
+        ))}
+      </div>
       <textarea
         value={task}
         onChange={(e) => setTask(e.target.value)}
@@ -26,13 +44,6 @@ export function TaskInput({ onGenerate, isGenerating, disabled }: Props) {
           disabled={disabled || isGenerating || !task.trim()}
         >
           {isGenerating ? "Generating..." : "Generate Plan"}
-        </button>
-        <button
-          className="btn btn-secondary"
-          onClick={() => setTask(SUGGESTED_PROMPT)}
-          disabled={isGenerating}
-        >
-          Reset
         </button>
       </div>
     </div>
