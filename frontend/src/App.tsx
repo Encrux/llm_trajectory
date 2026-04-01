@@ -203,7 +203,7 @@ function App() {
       const prompt = buildPrompt(scene, task);
       const tools = toOpenAITools();
       const toolCalls = await callLLM(prompt, tools, config);
-      (window as any).umami?.track("generate-plan", { task });
+      (window as any).umami?.track("generate-plan", { prompt: task.slice(0, 200) });
       setPlan(toolCalls);
 
       if (toolCalls.length > 0) {
