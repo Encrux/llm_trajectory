@@ -28,4 +28,4 @@ export function buildPrompt(scene: Scene, task: string): string {
 }
 
 export const SUGGESTED_PROMPT =
-  "Pick up the red cube and place it on the bowl";
+  "Pick up the red cube and place it on the plate";
