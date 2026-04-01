@@ -68,21 +68,37 @@ export function buildVisuals(
       geometry.rotateX(Math.PI / 2);
     }
 
-    const r = model.geom_rgba[geomId * 4 + 0];
-    const g = model.geom_rgba[geomId * 4 + 1];
-    const b = model.geom_rgba[geomId * 4 + 2];
-    const a = model.geom_rgba[geomId * 4 + 3];
-
     // Skip invisible geoms (collision-only)
     const group = model.geom_group[geomId];
     if (group === 3) {
-      // Collision group — don't render
       meshes.push(new THREE.Object3D());
       continue;
     }
 
+    // Use material color if assigned, otherwise geom rgba
+    const matId = model.geom_matid[geomId];
+    let r: number, g: number, b: number, a: number;
+    let specular = 0.3;
+    let shininess = 0.3;
+
+    if (matId >= 0) {
+      r = model.mat_rgba[matId * 4 + 0];
+      g = model.mat_rgba[matId * 4 + 1];
+      b = model.mat_rgba[matId * 4 + 2];
+      a = model.mat_rgba[matId * 4 + 3];
+      specular = model.mat_specular[matId];
+      shininess = model.mat_shininess[matId];
+    } else {
+      r = model.geom_rgba[geomId * 4 + 0];
+      g = model.geom_rgba[geomId * 4 + 1];
+      b = model.geom_rgba[geomId * 4 + 2];
+      a = model.geom_rgba[geomId * 4 + 3];
+    }
+
     const material = new THREE.MeshStandardMaterial({
       color: new THREE.Color(r, g, b),
+      metalness: specular * 0.5,
+      roughness: 1.0 - shininess,
       transparent: a < 1,
       opacity: a,
       side: geomType === mjGEOM_PLANE ? THREE.DoubleSide : THREE.FrontSide,
