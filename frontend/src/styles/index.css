@@ -100,6 +100,29 @@ body {
 }
 
 /* Scene Panel */
+.panel-header-toggle {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  user-select: none;
+}
+
+.panel-header-toggle:hover {
+  color: #bbb;
+}
+
+.panel-header-toggle .expand-icon {
+  font-size: 0.7rem;
+  color: #888;
+}
+
+.panel-header-toggle .step-count {
+  color: #666;
+  font-size: 0.65rem;
+  margin-left: auto;
+}
+
 .scene-objects {
   list-style: none;
   font-size: 0.85rem;
