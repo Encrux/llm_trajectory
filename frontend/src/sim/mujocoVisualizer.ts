@@ -25,6 +25,13 @@ export function buildVisuals(
 
   for (let geomId = 0; geomId < model.ngeom; geomId++) {
     const geomType = model.geom_type[geomId];
+
+    // Skip the MuJoCo floor plane — we render our own in Three.js
+    if (geomType === mjGEOM_PLANE) {
+      meshes.push(new THREE.Object3D());
+      continue;
+    }
+
     const s0 = model.geom_size[geomId * 3 + 0];
     const s1 = model.geom_size[geomId * 3 + 1];
     const s2 = model.geom_size[geomId * 3 + 2];
@@ -45,7 +52,7 @@ export function buildVisuals(
         geometry = new THREE.CapsuleGeometry(s0, s1 * 2, 8, 24);
         break;
       case mjGEOM_PLANE:
-        geometry = new THREE.PlaneGeometry(20, 20);
+        geometry = null; // handled separately in threeRenderer
         break;
       case mjGEOM_MESH:
         geometry = buildMeshGeometry(model, model.geom_dataid[geomId]);
