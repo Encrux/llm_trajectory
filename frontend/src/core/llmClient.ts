@@ -5,7 +5,7 @@ export async function callLLM(
   tools: object[],
   config: ApiConfig,
 ): Promise<ToolCall[]> {
-  const body: Record<string, unknown> = {
+  const body = {
     model: config.model,
     messages: [
       { role: "system", content: systemPrompt },
@@ -18,16 +18,9 @@ export async function callLLM(
     tool_choice: "auto",
   };
 
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-  if (config.apiToken) {
-    headers["Authorization"] = `Bearer ${config.apiToken}`;
-  }
-
   const response = await fetch(`${config.baseUrl}/v1/chat/completions`, {
     method: "POST",
-    headers,
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
 
@@ -38,7 +31,6 @@ export async function callLLM(
 
   const data = await response.json();
   const message = data.choices?.[0]?.message;
-  console.log("[llm] response:", JSON.stringify(message, null, 2));
   if (!message?.tool_calls || message.tool_calls.length === 0) {
     console.warn("[llm] No tool calls in response. Content:", message?.content || message?.reasoning);
     return [];

@@ -68,6 +68,5 @@ export interface PrimitiveDef {
 
 export interface ApiConfig {
   baseUrl: string;
-  apiToken: string;
   model: string;
 }

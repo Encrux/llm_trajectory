@@ -5,17 +5,16 @@ import { buildVisuals, syncVisuals, type VisualizerState } from "./sim/mujocoVis
 import { extractScene } from "./sim/sceneExtractor";
 import { Animator, type AnimatorStatus } from "./sim/animator";
 import { Scene } from "./core/scene";
-import type { ApiConfig, ToolCall, Trajectory, WaypointGroup } from "./core/types";
+import type { ToolCall, Trajectory, WaypointGroup } from "./core/types";
 import { buildPrompt, SUGGESTED_PROMPT } from "./core/prompt";
 import { toOpenAITools } from "./core/primitives";
 import { callLLM } from "./core/llmClient";
 import { transpile } from "./core/transpiler";
-import { loadConfig, saveConfig } from "./config";
+import { config } from "./config";
 import { ScenePanel } from "./components/ScenePanel";
 import { TaskInput } from "./components/TaskInput";
 import { PlanView } from "./components/PlanView";
 import { ExecutionControls } from "./components/ExecutionControls";
-import { ConfigDialog } from "./components/ConfigDialog";
 import { StatusBar } from "./components/StatusBar";
 import "./styles/index.css";
 
@@ -38,8 +37,6 @@ function App() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [animatorStatus, setAnimatorStatus] = useState<AnimatorStatus>("idle");
   const [currentStep, setCurrentStep] = useState(-1);
-  const [config, setConfigState] = useState<ApiConfig>(loadConfig());
-  const [showConfig, setShowConfig] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth > 768);
   const [sidebarWidth, setSidebarWidth] = useState(360);
   const [showHint, setShowHint] = useState(() => !localStorage.getItem("llm-traj-visited"));
@@ -74,9 +71,12 @@ function App() {
       });
     };
     const onMouseUp = () => {
-      resizing.current = false;
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
+      if (resizing.current) {
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+        // Delay clearing so onClick can check it
+        setTimeout(() => { resizing.current = false; }, 50);
+      }
     };
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("mouseup", onMouseUp);
@@ -117,20 +117,17 @@ function App() {
 
         setLoading(false);
 
-        // Pre-generate a plan for the suggested prompt so the user can just hit Play
-        try {
-          const prompt = buildPrompt(extractedScene, SUGGESTED_PROMPT);
-          const tools = toOpenAITools();
-          const toolCalls = await callLLM(prompt, tools, loadConfig());
-          if (mounted && toolCalls.length > 0) {
-            setPlan(toolCalls);
-            const traj = transpile(toolCalls, extractedScene);
-            setGroups([...traj.groups]);
-            setTrajectory(traj);
-            animatorRef.current?.loadTrajectory(traj);
-          }
-        } catch (e) {
-          console.warn("[init] Pre-generation failed:", e);
+        // Pre-computed plan for the suggested prompt — no LLM call needed
+        const defaultPlan: ToolCall[] = [
+          { name: "pick", params: { object_name: "Red Cube" } },
+          { name: "place", params: { target_name: "Plate" } },
+        ];
+        if (mounted) {
+          setPlan(defaultPlan);
+          const traj = transpile(defaultPlan, extractedScene);
+          setGroups([...traj.groups]);
+          setTrajectory(traj);
+          animatorRef.current?.loadTrajectory(traj);
         }
 
         const SUBSTEPS = 5;
@@ -235,11 +232,6 @@ function App() {
     setCurrentStep(-1);
   }, []);
 
-  // Config
-  const handleSaveConfig = useCallback((newConfig: ApiConfig) => {
-    setConfigState(newConfig);
-    saveConfig(newConfig);
-  }, []);
 
   return (
     <div className={`app-layout ${sidebarOpen ? "" : "sidebar-closed"}`}>
@@ -316,6 +308,8 @@ function App() {
         <div
           className={`sidebar-handle ${showHint && !sidebarOpen ? "with-hint" : ""}`}
           onClick={() => {
+            // Don't toggle if we just finished resizing
+            if (resizing.current) return;
             setSidebarOpen(!sidebarOpen);
             if (showHint) {
               setShowHint(false);
@@ -336,9 +330,6 @@ function App() {
         <div className="sidebar-content">
           <div className="sidebar-header">
             <h1>LLM Trajectory</h1>
-            <button onClick={() => setShowConfig(true)} title="Settings">
-              &#9881;
-            </button>
           </div>
 
           <ScenePanel scene={scene} />
@@ -365,13 +356,6 @@ function App() {
         loading={loading}
       />
 
-      {showConfig && (
-        <ConfigDialog
-          config={config}
-          onSave={handleSaveConfig}
-          onClose={() => setShowConfig(false)}
-        />
-      )}
     </div>
   );
 }
