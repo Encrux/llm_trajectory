@@ -12,17 +12,25 @@ body {
 }
 
 .app-layout {
-  display: grid;
-  grid-template-columns: 1fr 360px;
-  grid-template-rows: 1fr auto;
   width: 100vw;
   height: 100vh;
+  position: relative;
 }
 
 .viewport-container {
-  position: relative;
-  grid-row: 1;
-  grid-column: 1;
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 360px;
+  transition: right 0.3s ease;
+}
+
+.app-layout.sidebar-closed .viewport-container {
+  right: 0;
+}
+
+.viewport-container {
   overflow: hidden;
 }
 
@@ -30,6 +38,18 @@ body {
   width: 100%;
   height: 100%;
   display: block;
+}
+
+/* Invisible touch zone on right edge for opening sidebar */
+.edge-swipe-zone {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 24px;
+  z-index: 15;
+  /* touch-action: none prevents browser gestures but allows our handler */
+  touch-action: none;
 }
 
 .viewport-overlay {
@@ -47,15 +67,128 @@ body {
   text-align: center;
 }
 
-/* Sidebar */
+/* Sidebar handle — inside sidebar, sticks out to the left */
+.sidebar-handle {
+  position: absolute;
+  left: -18px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 48px;
+  background: #16213e;
+  border: 1px solid #0f3460;
+  border-right: none;
+  border-radius: 6px 0 0 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 11;
+}
+
+.sidebar:not(.collapsed) .sidebar-handle {
+  cursor: col-resize;
+}
+
+.sidebar-handle:hover {
+  background: #1c2a4e;
+}
+
+.sidebar-handle .handle-grip {
+  color: #666;
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+@media (max-width: 768px) {
+  .sidebar-handle {
+    width: 22px;
+    height: 56px;
+    left: -22px;
+  }
+}
+
+/* Sidebar — fixed position with right-based animation (keeps handle attached) */
 .sidebar {
-  grid-row: 1;
-  grid-column: 2;
+  position: fixed;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 360px;
   background: #16213e;
   border-left: 1px solid #0f3460;
+  overflow: visible;
+  transition: right 0.3s ease;
+  z-index: 10;
+}
+
+.sidebar-content {
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+  height: 100%;
+}
+
+.sidebar.collapsed {
+  right: -360px;
+}
+
+/* Handle with hint label on first visit */
+.sidebar-handle.with-hint {
+  width: auto;
+  left: 0;
+  transform: translateX(-100%) translateY(-50%);
+  padding: 10px 14px;
+  border-radius: 8px 0 0 8px;
+  border-right: none;
+  background: #533483;
+  animation: hint-pulse 2s ease-in-out infinite;
+  box-shadow: 0 4px 16px rgba(83, 52, 131, 0.4);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sidebar-handle.with-hint .handle-grip {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.handle-hint {
+  color: white;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+@keyframes hint-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* Disable transition during touch drag for smooth following */
+.sidebar.dragging {
+  transition: none !important;
+}
+
+@media (max-width: 768px) {
+  .viewport-container {
+    right: 0 !important; /* full width on mobile, sidebar overlays */
+  }
+
+  .sidebar {
+    width: 320px;
+    max-width: 85vw;
+    height: 100dvh;
+    box-shadow: -4px 0 20px rgba(0, 0, 0, 0.4);
+  }
+
+  .sidebar.collapsed {
+    right: -320px;
+    box-shadow: none;
+  }
+
+  .status-bar {
+    display: none !important;
+  }
 }
 
 .sidebar-header {
@@ -308,8 +441,11 @@ body {
 
 /* Status Bar */
 .status-bar {
-  grid-row: 2;
-  grid-column: 1 / -1;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 5;
   background: #0f3460;
   padding: 6px 16px;
   font-size: 0.75rem;

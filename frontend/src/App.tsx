@@ -6,7 +6,7 @@ import { extractScene } from "./sim/sceneExtractor";
 import { Animator, type AnimatorStatus } from "./sim/animator";
 import { Scene } from "./core/scene";
 import type { ApiConfig, ToolCall, Trajectory, WaypointGroup } from "./core/types";
-import { buildPrompt } from "./core/prompt";
+import { buildPrompt, SUGGESTED_PROMPT } from "./core/prompt";
 import { toOpenAITools } from "./core/primitives";
 import { callLLM } from "./core/llmClient";
 import { transpile } from "./core/transpiler";
@@ -40,6 +40,51 @@ function App() {
   const [currentStep, setCurrentStep] = useState(-1);
   const [config, setConfigState] = useState<ApiConfig>(loadConfig());
   const [showConfig, setShowConfig] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth > 768);
+  const [sidebarWidth, setSidebarWidth] = useState(360);
+  const [showHint, setShowHint] = useState(() => !localStorage.getItem("llm-traj-visited"));
+  const sidebarRef = useRef<HTMLDivElement>(null);
+  const dragging = useRef(false);
+  const dragStartX = useRef(0);
+  const resizing = useRef(false);
+
+  // Resize viewport when sidebar toggles or resizes
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (canvasRef.current && rendererRef.current) {
+        const parent = canvasRef.current.parentElement;
+        if (parent) handleResize(rendererRef.current, parent.clientWidth, parent.clientHeight);
+      }
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [sidebarOpen, sidebarWidth]);
+
+  // Desktop resize handle
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (!resizing.current) return;
+      const newWidth = Math.max(280, Math.min(600, window.innerWidth - e.clientX));
+      setSidebarWidth(newWidth);
+      // Live-resize: requestAnimationFrame to batch with render
+      requestAnimationFrame(() => {
+        if (canvasRef.current && rendererRef.current) {
+          const parent = canvasRef.current.parentElement;
+          if (parent) handleResize(rendererRef.current, parent.clientWidth, parent.clientHeight);
+        }
+      });
+    };
+    const onMouseUp = () => {
+      resizing.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+  }, []);
 
   // Init MuJoCo + Three.js
   useEffect(() => {
@@ -71,6 +116,22 @@ function App() {
         animatorRef.current.setThreeScene(rState.scene);
 
         setLoading(false);
+
+        // Pre-generate a plan for the suggested prompt so the user can just hit Play
+        try {
+          const prompt = buildPrompt(extractedScene, SUGGESTED_PROMPT);
+          const tools = toOpenAITools();
+          const toolCalls = await callLLM(prompt, tools, loadConfig());
+          if (mounted && toolCalls.length > 0) {
+            setPlan(toolCalls);
+            const traj = transpile(toolCalls, extractedScene);
+            setGroups([...traj.groups]);
+            setTrajectory(traj);
+            animatorRef.current?.loadTrajectory(traj);
+          }
+        } catch (e) {
+          console.warn("[init] Pre-generation failed:", e);
+        }
 
         const SUBSTEPS = 5;
         function animate() {
@@ -164,7 +225,10 @@ function App() {
   }, [scene, config]);
 
   // Execution controls
-  const handlePlay = useCallback(async () => await animatorRef.current?.play(), []);
+  const handlePlay = useCallback(async () => {
+    if (window.innerWidth <= 768) setSidebarOpen(false);
+    await animatorRef.current?.play();
+  }, []);
   const handlePause = useCallback(() => animatorRef.current?.pause(), []);
   const handleReset = useCallback(() => {
     animatorRef.current?.reset();
@@ -178,37 +242,120 @@ function App() {
   }, []);
 
   return (
-    <div className="app-layout">
-      <div className="viewport-container">
+    <div className={`app-layout ${sidebarOpen ? "" : "sidebar-closed"}`}>
+      <div
+        className="viewport-container"
+        style={sidebarOpen && window.innerWidth > 768 ? { right: `${sidebarWidth}px` } : undefined}
+      >
         <canvas ref={canvasRef} />
+        {/* Right edge touch zone for opening sidebar (doesn't interfere with OrbitControls) */}
+        {!sidebarOpen && (
+          <div
+            className="edge-swipe-zone"
+            onTouchStart={(e) => {
+              dragging.current = true;
+              dragStartX.current = e.touches[0].clientX;
+              sidebarRef.current?.classList.add("dragging");
+            }}
+            onTouchMove={(e) => {
+              if (!dragging.current || !sidebarRef.current) return;
+              const dx = dragStartX.current - e.touches[0].clientX;
+              const sw = Math.min(320, window.innerWidth * 0.85);
+              const offset = Math.max(0, sw - dx);
+              sidebarRef.current.style.right = `${-offset}px`;
+            }}
+            onTouchEnd={(e) => {
+              if (!dragging.current || !sidebarRef.current) return;
+              dragging.current = false;
+              sidebarRef.current.classList.remove("dragging");
+              const dx = dragStartX.current - e.changedTouches[0].clientX;
+              const sw = Math.min(320, window.innerWidth * 0.85);
+              sidebarRef.current.style.right = "";
+              if (dx / sidebarWidth > 0.3) {
+                setSidebarOpen(true);
+                if (showHint) {
+                  setShowHint(false);
+                  localStorage.setItem("llm-traj-visited", "1");
+                }
+              }
+            }}
+          />
+        )}
         {loading && <div className="viewport-overlay">Loading MuJoCo + Franka Panda...</div>}
         {isGenerating && <div className="viewport-overlay">Generating plan...</div>}
         {animatorStatus === "running" && currentStep === -1 && <div className="viewport-overlay">Computing trajectory...</div>}
         {error && !loading && <div className="viewport-overlay error">{error}</div>}
       </div>
 
-      <div className="sidebar">
-        <div className="sidebar-header">
-          <h1>LLM Trajectory</h1>
-          <button onClick={() => setShowConfig(true)} title="Settings">
-            &#9881;
-          </button>
+      <div
+        ref={sidebarRef}
+        className={`sidebar ${sidebarOpen ? "" : "collapsed"}`}
+        style={window.innerWidth > 768 ? { width: `${sidebarWidth}px` } : undefined}
+        onTouchStart={(e) => {
+          dragging.current = true;
+          dragStartX.current = e.touches[0].clientX;
+          sidebarRef.current?.classList.add("dragging");
+        }}
+        onTouchMove={(e) => {
+          if (!dragging.current || !sidebarRef.current) return;
+          const dx = e.touches[0].clientX - dragStartX.current;
+          if (dx > 0) {
+            sidebarRef.current.style.right = `${-dx}px`;
+          }
+        }}
+        onTouchEnd={(e) => {
+          if (!dragging.current || !sidebarRef.current) return;
+          dragging.current = false;
+          sidebarRef.current.classList.remove("dragging");
+          sidebarRef.current.style.right = "";
+          const dx = e.changedTouches[0].clientX - dragStartX.current;
+          if (dx > 80) setSidebarOpen(false);
+        }}
+      >
+        {/* Handle — inside sidebar, sticks out to the left, always visible */}
+        <div
+          className={`sidebar-handle ${showHint && !sidebarOpen ? "with-hint" : ""}`}
+          onClick={() => {
+            setSidebarOpen(!sidebarOpen);
+            if (showHint) {
+              setShowHint(false);
+              localStorage.setItem("llm-traj-visited", "1");
+            }
+          }}
+          onMouseDown={(e) => {
+            if (window.innerWidth <= 768 || !sidebarOpen) return;
+            e.preventDefault();
+            resizing.current = true;
+            document.body.style.cursor = "col-resize";
+            document.body.style.userSelect = "none";
+          }}
+        >
+          <span className="handle-grip">⋮</span>
+          {showHint && !sidebarOpen && <span className="handle-hint">Open controls</span>}
         </div>
+        <div className="sidebar-content">
+          <div className="sidebar-header">
+            <h1>LLM Trajectory</h1>
+            <button onClick={() => setShowConfig(true)} title="Settings">
+              &#9881;
+            </button>
+          </div>
 
-        <ScenePanel scene={scene} />
-        <TaskInput
-          onGenerate={handleGenerate}
-          isGenerating={isGenerating}
-          disabled={loading || !scene}
-        />
-        <PlanView groups={groups} currentWaypointIndex={currentStep} />
-        <ExecutionControls
-          status={animatorStatus}
-          onPlay={handlePlay}
-          onPause={handlePause}
-          onReset={handleReset}
-          disabled={!trajectory}
-        />
+          <ScenePanel scene={scene} />
+          <TaskInput
+            onGenerate={handleGenerate}
+            isGenerating={isGenerating}
+            disabled={loading || !scene}
+          />
+          <PlanView groups={groups} currentWaypointIndex={currentStep} />
+          <ExecutionControls
+            status={animatorStatus}
+            onPlay={handlePlay}
+            onPause={handlePause}
+            onReset={handleReset}
+            disabled={!trajectory}
+          />
+        </div>
       </div>
 
       <StatusBar
