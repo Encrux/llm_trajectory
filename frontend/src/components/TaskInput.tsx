@@ -34,12 +34,19 @@ export function TaskInput({ onGenerate, isGenerating, disabled }: Props) {
           </button>
         ))}
       </div>
-      <textarea
-        value={task}
-        onChange={(e) => setTask(e.target.value)}
-        placeholder="Describe what the robot should do..."
-        disabled={isGenerating}
-      />
+      <div className="textarea-wrapper">
+        <textarea
+          value={task}
+          onChange={(e) => setTask(e.target.value)}
+          placeholder="Describe what the robot should do..."
+          disabled={isGenerating}
+        />
+        {task && !isGenerating && (
+          <button className="textarea-clear" onClick={() => setTask("")} title="Clear">
+            &times;
+          </button>
+        )}
+      </div>
       <div className="actions">
         <button
           className="btn btn-primary"

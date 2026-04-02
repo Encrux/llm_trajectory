@@ -16,6 +16,7 @@ import { TaskInput } from "./components/TaskInput";
 import { PlanView } from "./components/PlanView";
 import { ExecutionControls } from "./components/ExecutionControls";
 import { StatusBar } from "./components/StatusBar";
+import { BottomSheet } from "./components/BottomSheet";
 import "./styles/index.css";
 
 function App() {
@@ -38,6 +39,7 @@ function App() {
   const [animatorStatus, setAnimatorStatus] = useState<AnimatorStatus>("idle");
   const [currentStep, setCurrentStep] = useState(-1);
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth > 768);
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768);
   const [sidebarWidth, setSidebarWidth] = useState(360);
   const [showHint, setShowHint] = useState(() => !localStorage.getItem("llm-traj-visited"));
   const sidebarRef = useRef<HTMLDivElement>(null);
@@ -176,9 +178,10 @@ function App() {
     };
   }, []);
 
-  // Resize handler
+  // Resize handler + mobile detection
   useEffect(() => {
     function onResize() {
+      setIsMobile(window.innerWidth <= 768);
       if (!canvasRef.current || !rendererRef.current) return;
       const parent = canvasRef.current.parentElement;
       if (!parent) return;
@@ -223,11 +226,16 @@ function App() {
   }, [scene, config]);
 
   // Execution controls
+  const bottomSheetRef = useRef<{ collapse: () => void }>(null);
   const handlePlay = useCallback(async () => {
-    if (window.innerWidth <= 768) setSidebarOpen(false);
+    if (isMobile) {
+      bottomSheetRef.current?.collapse();
+    } else {
+      // no-op on desktop, sidebar stays open
+    }
     (window as any).umami?.track("play-trajectory");
     await animatorRef.current?.play();
-  }, []);
+  }, [isMobile]);
   const handlePause = useCallback(() => animatorRef.current?.pause(), []);
   const handleReset = useCallback(() => {
     animatorRef.current?.reset();
@@ -236,111 +244,89 @@ function App() {
 
 
   return (
-    <div className={`app-layout ${sidebarOpen ? "" : "sidebar-closed"}`}>
+    <div className={`app-layout ${!isMobile && sidebarOpen ? "" : "sidebar-closed"}`}>
       <div
         className="viewport-container"
-        style={sidebarOpen && window.innerWidth > 768 ? { right: `${sidebarWidth}px` } : undefined}
+        style={!isMobile && sidebarOpen ? { right: `${sidebarWidth}px` } : undefined}
       >
         <canvas ref={canvasRef} />
-        {/* Right edge touch zone for opening sidebar (doesn't interfere with OrbitControls) */}
-        {!sidebarOpen && (
-          <div
-            className="edge-swipe-zone"
-            onTouchStart={(e) => {
-              dragging.current = true;
-              dragStartX.current = e.touches[0].clientX;
-              sidebarRef.current?.classList.add("dragging");
-            }}
-            onTouchMove={(e) => {
-              if (!dragging.current || !sidebarRef.current) return;
-              const dx = dragStartX.current - e.touches[0].clientX;
-              const sw = Math.min(320, window.innerWidth * 0.85);
-              const offset = Math.max(0, sw - dx);
-              sidebarRef.current.style.right = `${-offset}px`;
-            }}
-            onTouchEnd={(e) => {
-              if (!dragging.current || !sidebarRef.current) return;
-              dragging.current = false;
-              sidebarRef.current.classList.remove("dragging");
-              const dx = dragStartX.current - e.changedTouches[0].clientX;
-              const sw = Math.min(320, window.innerWidth * 0.85);
-              sidebarRef.current.style.right = "";
-              if (dx / sidebarWidth > 0.3) {
-                setSidebarOpen(true);
-                if (showHint) {
-                  setShowHint(false);
-                  localStorage.setItem("llm-traj-visited", "1");
-                  (window as any).umami?.track("sidebar-discovered");
-                }
-              }
-            }}
-          />
-        )}
         {loading && <div className="viewport-overlay">Loading MuJoCo + Franka Panda...</div>}
         {isGenerating && <div className="viewport-overlay">Generating plan...</div>}
         {animatorStatus === "running" && currentStep === -1 && <div className="viewport-overlay">Computing trajectory...</div>}
         {error && !loading && <div className="viewport-overlay error">{error}</div>}
       </div>
 
-      <div
-        ref={sidebarRef}
-        className={`sidebar ${sidebarOpen ? "" : "collapsed"}`}
-        style={window.innerWidth > 768 ? { width: `${sidebarWidth}px` } : undefined}
-        onTouchStart={(e) => {
-          dragging.current = true;
-          dragStartX.current = e.touches[0].clientX;
-          sidebarRef.current?.classList.add("dragging");
-        }}
-        onTouchMove={(e) => {
-          if (!dragging.current || !sidebarRef.current) return;
-          const dx = e.touches[0].clientX - dragStartX.current;
-          if (dx > 0) {
-            sidebarRef.current.style.right = `${-dx}px`;
-          }
-        }}
-        onTouchEnd={(e) => {
-          if (!dragging.current || !sidebarRef.current) return;
-          dragging.current = false;
-          sidebarRef.current.classList.remove("dragging");
-          sidebarRef.current.style.right = "";
-          const dx = e.changedTouches[0].clientX - dragStartX.current;
-          if (dx > 80) setSidebarOpen(false);
-        }}
-      >
-        {/* Handle — inside sidebar, sticks out to the left, always visible */}
+      {/* Desktop: sidebar */}
+      {!isMobile && (
         <div
-          className={`sidebar-handle ${showHint && !sidebarOpen ? "with-hint" : ""}`}
-          onClick={() => {
-            // Don't toggle if we just finished resizing
-            if (resizing.current) return;
-            setSidebarOpen(!sidebarOpen);
-            if (showHint) {
-              setShowHint(false);
-              localStorage.setItem("llm-traj-visited", "1");
-              (window as any).umami?.track("sidebar-discovered");
-            }
-          }}
-          onMouseDown={(e) => {
-            if (window.innerWidth <= 768 || !sidebarOpen) return;
-            e.preventDefault();
-            resizing.current = true;
-            document.body.style.cursor = "col-resize";
-            document.body.style.userSelect = "none";
-          }}
+          ref={sidebarRef}
+          className={`sidebar ${sidebarOpen ? "" : "collapsed"}`}
+          style={{ width: `${sidebarWidth}px` }}
         >
-          <span className="handle-grip">⋮</span>
-          {showHint && !sidebarOpen && <span className="handle-hint">Open controls</span>}
-        </div>
-        <div className="sidebar-content">
-          <div className="sidebar-header">
-            <h1>LLM Trajectory</h1>
+          <div
+            className={`sidebar-handle ${showHint && !sidebarOpen ? "with-hint" : ""}`}
+            onClick={() => {
+              if (resizing.current) return;
+              setSidebarOpen(!sidebarOpen);
+              if (showHint) {
+                setShowHint(false);
+                localStorage.setItem("llm-traj-visited", "1");
+                (window as any).umami?.track("sidebar-discovered");
+              }
+            }}
+            onMouseDown={(e) => {
+              if (!sidebarOpen) return;
+              e.preventDefault();
+              resizing.current = true;
+              document.body.style.cursor = "col-resize";
+              document.body.style.userSelect = "none";
+            }}
+          >
+            <span className="handle-grip">⋮</span>
+            {showHint && !sidebarOpen && <span className="handle-hint">Open controls</span>}
           </div>
+          <div className="sidebar-content">
+            <div className="sidebar-header">
+              <h1>LLM Trajectory</h1>
+            </div>
+            <ScenePanel scene={scene} />
+            <TaskInput
+              onGenerate={handleGenerate}
+              isGenerating={isGenerating}
+              disabled={loading || !scene}
+            />
+            <PlanView groups={groups} currentWaypointIndex={currentStep} />
+            <ExecutionControls
+              status={animatorStatus}
+              onPlay={handlePlay}
+              onPause={handlePause}
+              onReset={handleReset}
+              disabled={!trajectory}
+            />
+          </div>
+        </div>
+      )}
 
-          <ScenePanel scene={scene} />
+      {/* Mobile: bottom sheet */}
+      {isMobile && !loading && (
+        <BottomSheet
+          ref={bottomSheetRef}
+          peekContent={
+            <div className="bottom-sheet-peek-row">
+              <span className="bottom-sheet-title">LLM Trajectory</span>
+              {trajectory && (
+                <button className="btn btn-primary btn-small" onClick={handlePlay}>
+                  {animatorStatus === "done" ? "Replay" : "Play"}
+                </button>
+              )}
+            </div>
+          }
+        >
+          <ScenePanel scene={scene} defaultCollapsed />
           <TaskInput
             onGenerate={handleGenerate}
             isGenerating={isGenerating}
-            disabled={loading || !scene}
+            disabled={!scene}
           />
           <PlanView groups={groups} currentWaypointIndex={currentStep} />
           <ExecutionControls
@@ -350,15 +336,18 @@ function App() {
             onReset={handleReset}
             disabled={!trajectory}
           />
-        </div>
-      </div>
+        </BottomSheet>
+      )}
 
-      <StatusBar
-        config={config}
-        animatorStatus={animatorStatus}
-        error={error}
-        loading={loading}
-      />
+      {/* Desktop only */}
+      {!isMobile && (
+        <StatusBar
+          config={config}
+          animatorStatus={animatorStatus}
+          error={error}
+          loading={loading}
+        />
+      )}
 
     </div>
   );

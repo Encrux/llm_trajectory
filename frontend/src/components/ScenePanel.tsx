@@ -1,8 +1,8 @@
 import { useState } from "react";
 import type { Scene } from "../core/scene";
 
-export function ScenePanel({ scene }: { scene: Scene | null }) {
-  const [collapsed, setCollapsed] = useState(false);
+export function ScenePanel({ scene, defaultCollapsed = false }: { scene: Scene | null; defaultCollapsed?: boolean }) {
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
 
   if (!scene) return <div className="panel"><div className="plan-empty">Loading scene...</div></div>;
 

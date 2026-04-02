@@ -40,17 +40,6 @@ body {
   display: block;
 }
 
-/* Invisible touch zone on right edge for opening sidebar */
-.edge-swipe-zone {
-  position: absolute;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  width: 24px;
-  z-index: 15;
-  /* touch-action: none prevents browser gestures but allows our handler */
-  touch-action: none;
-}
 
 .viewport-overlay {
   position: absolute;
@@ -169,25 +158,94 @@ body {
   transition: none !important;
 }
 
+/* ── Bottom Sheet (mobile only) ── */
+.bottom-sheet {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #16213e;
+  border-radius: 16px 16px 0 0;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.4);
+  z-index: 20;
+  transition: height 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.bottom-sheet.dragging {
+  transition: none !important;
+}
+
+.bottom-sheet-handle {
+  padding: 10px 16px 6px;
+  cursor: grab;
+  touch-action: none;
+  flex-shrink: 0;
+}
+
+.bottom-sheet-bar {
+  width: 40px;
+  height: 4px;
+  background: #555;
+  border-radius: 2px;
+  margin: 0 auto 8px;
+}
+
+.bottom-sheet-peek {
+  padding: 0;
+}
+
+.bottom-sheet-peek-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.bottom-sheet-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #e0e0e0;
+}
+
+.btn-small {
+  padding: 4px 12px;
+  font-size: 0.75rem;
+  width: auto;
+  flex: none;
+}
+
+.bottom-sheet-content {
+  flex: 1;
+  overflow-y: auto;
+  position: relative;
+  padding-bottom: env(safe-area-inset-bottom, 16px);
+}
+
+/* Fade at bottom to hint at more content */
+.bottom-sheet-fade {
+  position: sticky;
+  bottom: 0;
+  height: 24px;
+  background: linear-gradient(transparent, #16213e);
+  pointer-events: none;
+}
+
+/* Hide content when peeking */
+.bottom-sheet.peek .bottom-sheet-content {
+  display: none;
+}
+
 @media (max-width: 768px) {
   .viewport-container {
-    right: 0 !important; /* full width on mobile, sidebar overlays */
+    position: fixed !important;
+    inset: 0 !important;
   }
 
-  .sidebar {
-    width: 320px;
-    max-width: 85vw;
-    height: 100dvh;
-    box-shadow: -4px 0 20px rgba(0, 0, 0, 0.4);
-  }
-
-  .sidebar.collapsed {
-    right: -320px;
-    box-shadow: none;
-  }
-
-  .status-bar {
-    display: none !important;
+  /* Prevent iOS zoom on input focus */
+  .task-input textarea {
+    font-size: 16px;
   }
 }
 
@@ -315,6 +373,34 @@ body {
 }
 
 /* Task Input */
+.textarea-wrapper {
+  position: relative;
+}
+
+.textarea-clear {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: #888;
+  border-radius: 50%;
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.textarea-clear:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #ccc;
+}
+
 .task-input textarea {
   width: 100%;
   padding: 8px 10px;
