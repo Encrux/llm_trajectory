@@ -9,7 +9,7 @@ import type { ToolCall, Trajectory, WaypointGroup } from "./core/types";
 import { buildPrompt, SUGGESTED_PROMPT } from "./core/prompt";
 import { toOpenAITools } from "./core/primitives";
 import { callLLM } from "./core/llmClient";
-import { transpile } from "./core/transpiler";
+import { resolve } from "./core/resolver";
 import { config } from "./config";
 import { ScenePanel } from "./components/ScenePanel";
 import { TaskInput } from "./components/TaskInput";
@@ -124,7 +124,7 @@ function App() {
         ];
         if (mounted) {
           setPlan(defaultPlan);
-          const traj = transpile(defaultPlan, extractedScene);
+          const traj = resolve(defaultPlan, extractedScene);
           setGroups([...traj.groups]);
           setTrajectory(traj);
           animatorRef.current?.loadTrajectory(traj);
@@ -208,7 +208,7 @@ function App() {
 
       if (toolCalls.length > 0) {
         const currentScene = extractScene(mujocoRef.current!);
-        const traj = transpile(toolCalls, currentScene);
+        const traj = resolve(toolCalls, currentScene);
         setGroups([...traj.groups]);
         setTrajectory(traj);
 

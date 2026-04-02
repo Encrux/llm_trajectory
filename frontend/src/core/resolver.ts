@@ -2,7 +2,7 @@ import type { Scene } from "./scene";
 import type { ToolCall, Trajectory, Waypoint, WaypointGroup } from "./types";
 import { getHandler } from "./primitives";
 
-export function transpile(
+export function resolve(
   toolCalls: readonly ToolCall[],
   scene: Scene,
 ): Trajectory {

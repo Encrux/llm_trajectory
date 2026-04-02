@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from llm_trajectory.primitives.registry import primitive
 from llm_trajectory.scene.models import Scene
-from llm_trajectory.transpiler.trajectory import Waypoint
+from llm_trajectory.resolver.trajectory import Waypoint
 
 
 @primitive

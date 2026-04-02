@@ -2,19 +2,17 @@ import pytest
 
 from llm_trajectory.primitives import handlers as _  # noqa: F401
 from llm_trajectory.scene.models import Position, Scene
-from llm_trajectory.transpiler.transpiler import ToolCall, Transpiler
+from llm_trajectory.resolver.resolver import ToolCall, resolve
 
 
-class TestTranspiler:
+class TestResolver:
     def test_single_move(self, sample_scene: Scene):
-        transpiler = Transpiler()
         calls = [ToolCall("move_to_point", {"point_name": "Banana"})]
-        trajectory = transpiler.transpile(calls, sample_scene)
+        trajectory = resolve(calls, sample_scene)
         assert len(trajectory.waypoints) == 1
         assert trajectory.waypoints[0].position == Position(0.3, 0.1, 0.02)
 
     def test_pick_sequence(self, sample_scene: Scene):
-        transpiler = Transpiler()
         calls = [
             ToolCall("move_to_point_offset", {"point_name": "Banana", "x_offset": 0.0, "y_offset": 0.0, "z_offset": 0.1}),
             ToolCall("open_gripper", {}),
@@ -22,7 +20,7 @@ class TestTranspiler:
             ToolCall("close_gripper", {}),
             ToolCall("move_to_point_offset", {"point_name": "Banana", "x_offset": 0.0, "y_offset": 0.0, "z_offset": 0.15}),
         ]
-        trajectory = transpiler.transpile(calls, sample_scene)
+        trajectory = resolve(calls, sample_scene)
         assert len(trajectory.waypoints) == 5
         assert trajectory.waypoints[0].position.z == pytest.approx(0.12)
         assert trajectory.waypoints[1].gripper == "open"
@@ -31,23 +29,20 @@ class TestTranspiler:
         assert trajectory.waypoints[4].position.z == pytest.approx(0.17)
 
     def test_unknown_primitive_raises(self, sample_scene: Scene):
-        transpiler = Transpiler()
         calls = [ToolCall("fly_away", {})]
         with pytest.raises(KeyError, match="fly_away"):
-            transpiler.transpile(calls, sample_scene)
+            resolve(calls, sample_scene)
 
     def test_empty_calls(self, sample_scene: Scene):
-        transpiler = Transpiler()
-        trajectory = transpiler.transpile([], sample_scene)
+        trajectory = resolve([], sample_scene)
         assert len(trajectory.waypoints) == 0
 
     def test_trajectory_to_json(self, sample_scene: Scene):
-        transpiler = Transpiler()
         calls = [
             ToolCall("move_to_point", {"point_name": "Bowl"}),
             ToolCall("open_gripper", {}),
         ]
-        trajectory = transpiler.transpile(calls, sample_scene)
+        trajectory = resolve(calls, sample_scene)
         trajectory.metadata = {"scene": "test", "task": "test task"}
         json_str = trajectory.to_json()
         assert '"position"' in json_str

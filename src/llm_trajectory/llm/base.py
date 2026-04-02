@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from llm_trajectory.transpiler.transpiler import ToolCall
+from llm_trajectory.resolver.resolver import ToolCall
 
 
 class LLMBackend(Protocol):
