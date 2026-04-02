@@ -1,4 +1,26 @@
 /.claude
-/.env
-/.pytest_cache
-/.venv
+.env
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# IDE
+.idea/
+.vscode/
+*.sw?
