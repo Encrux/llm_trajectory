@@ -1,4 +1,3 @@
-import * as THREE from "three";
 import type { Position, Trajectory, Waypoint } from "../core/types";
 import type { MujocoState } from "./mujocoLoader";
 
@@ -49,8 +48,6 @@ export class Animator {
   private ikSolutions: Map<number, Float64Array> = new Map();
   // Home orientation matrix (3x3, row-major) — the desired EE orientation
   private homeOriMat: Float64Array;
-  // IK goal marker (Three.js sphere, green)
-  private ikGoalMarker: THREE.Mesh | null = null;
 
   constructor(state: MujocoState, callbacks: AnimatorCallbacks = {}) {
     this.state = state;
@@ -68,8 +65,6 @@ export class Animator {
       this.homeOriMat[i] = data.xmat[mi + i];
     }
 
-    // Show TCP debug point (red dot) at the current TCP position
-    this.updateTcpDebugPoint();
   }
 
   loadTrajectory(trajectory: Trajectory): void {
@@ -134,38 +129,6 @@ export class Animator {
   }
 
 
-  /** Set a Three.js scene reference so we can add the IK goal marker. */
-  setThreeScene(threeScene: THREE.Scene): void {
-    const geo = new THREE.SphereGeometry(0.015, 16, 16);
-    const mat = new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.6 });
-    this.ikGoalMarker = new THREE.Mesh(geo, mat);
-    this.ikGoalMarker.visible = false;
-    threeScene.add(this.ikGoalMarker);
-  }
-
-  private showIkGoal(pos: Position): void {
-    if (this.ikGoalMarker) {
-      this.ikGoalMarker.position.set(pos.x, pos.y, pos.z);
-      this.ikGoalMarker.visible = true;
-    }
-  }
-
-  private hideIkGoal(): void {
-    if (this.ikGoalMarker) {
-      this.ikGoalMarker.visible = false;
-    }
-  }
-
-  /** Update the mocap body (red dot) to show current TCP position. */
-  updateTcpDebugPoint(): void {
-    const { data } = this.state;
-    if (data.mocap_pos.length >= 3) {
-      const [tx, ty, tz] = this.getTcpPos(data);
-      data.mocap_pos[0] = tx;
-      data.mocap_pos[1] = ty;
-      data.mocap_pos[2] = tz;
-    }
-  }
 
   /**
    * Get the TCP position (fingertip grasp point) from the hand body.
@@ -290,13 +253,6 @@ export class Animator {
       this.targetQpos = this.ikSolutions.get(this.currentStep) || this.startQpos;
 
       console.log(`[move] step ${this.currentStep}, gripper ctrl=${data.ctrl[this.gripperActuatorIdx]}, finger qpos: ${data.qpos[7].toFixed(4)}, ${data.qpos[8].toFixed(4)}`);
-      // Show IK goal (green dot) and move mocap (red dot) to target
-      this.showIkGoal(wp.position);
-      if (data.mocap_pos.length >= 3) {
-        data.mocap_pos[0] = wp.position.x;
-        data.mocap_pos[1] = wp.position.y;
-        data.mocap_pos[2] = wp.position.z;
-      }
 
       this.totalFrames = FRAMES_PER_MOVE;
       this.framesRemaining = FRAMES_PER_MOVE;

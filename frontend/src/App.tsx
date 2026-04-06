@@ -115,7 +115,6 @@ function App() {
           onStatusChange: (s) => setAnimatorStatus(s),
           onError: (e) => setError(e.message),
         });
-        animatorRef.current.setThreeScene(rState.scene);
 
         setLoading(false);
 
@@ -158,7 +157,6 @@ function App() {
             animatorRef.current?.postFrame();
           }
 
-          animatorRef.current?.updateTcpDebugPoint();
           syncVisuals(mujocoRef.current!, vizRef.current!);
           renderThree(rendererRef.current!);
           frameId = requestAnimationFrame(animate);

@@ -87,9 +87,9 @@
             mass="0.06" friction="2.0 0.3 0.1" condim="6"/>
     </body>
 
-    <!-- Mocap target (red dot) -->
+    <!-- Mocap body (invisible, used for TCP tracking) -->
     <body name="target" mocap="true" pos="0.4 0 0.5">
-      <geom type="sphere" size="0.015" rgba="1 0 0 0.5" contype="0" conaffinity="0"/>
+      <geom type="sphere" size="0.001" rgba="0 0 0 0" contype="0" conaffinity="0"/>
     </body>
   </worldbody>
 
