@@ -19,38 +19,30 @@ export function loadMujoco(): Promise<MujocoState> {
 }
 
 async function doLoad(): Promise<MujocoState> {
-  console.log("[mujoco] Importing WASM module...");
-  const loadModule = (await import(/* @vite-ignore */ "/vendor/mujoco/mujoco_wasm.js")).default;
-  console.log("[mujoco] Initializing WASM...");
-  const mj = await loadModule();
-  console.log("[mujoco] WASM ready");
+  // Phase 1: Start WASM init + both XML fetches in parallel
+  const [mj, pandaXml, sceneXml] = await Promise.all([
+    initWasm(),
+    fetchText(`${MUJOCO_BASE_PATH}franka_emika_panda/panda.xml`),
+    fetchText(`${MUJOCO_BASE_PATH}scene.xml`),
+  ]);
 
-  // Load panda.xml and its meshes into the VFS
-  await loadPandaModel(mj);
+  // Phase 2: Fetch all 67 mesh files in parallel (needs mj for VFS, pandaXml for file list)
+  await loadMeshes(mj, pandaXml);
 
-  // Merge scene XML with panda XML (avoid broken <include> in WASM)
-  const mergedXml = await buildMergedScene();
-  mkdirRecursive(mj, "/working");
+  // Phase 3: Merge XMLs, load model
+  const mergedXml = buildMergedScene(pandaXml, sceneXml);
+  mkdirRecursive(mj, "/working/franka_emika_panda");
   mj.FS.writeFile("/working/scene.xml", mergedXml);
-  console.log("[mujoco] Merged scene XML written");
+  mj.FS.writeFile("/working/franka_emika_panda/panda.xml", pandaXml);
 
-  // Load model
   const model = mj.MjModel.loadFromXML("/working/scene.xml");
   const data = new mj.MjData(model);
 
   // Apply home keyframe to arm joints only (first 9 qpos: 7 arm + 2 finger)
-  // Don't overwrite free-joint qpos (object positions) which come after
   if (model.nkey > 0) {
-    const ARM_NQ = 9; // 7 arm joints + 2 finger slide joints
-    const keyQpos = model.key_qpos;
-    for (let i = 0; i < ARM_NQ; i++) {
-      data.qpos[i] = keyQpos[i];
-    }
-    const nu = model.nu;
-    const keyCtrl = model.key_ctrl;
-    for (let i = 0; i < nu; i++) {
-      data.ctrl[i] = keyCtrl[i];
-    }
+    const ARM_NQ = 9;
+    for (let i = 0; i < ARM_NQ; i++) data.qpos[i] = model.key_qpos[i];
+    for (let i = 0; i < model.nu; i++) data.ctrl[i] = model.key_ctrl[i];
   }
 
   mj.mj_forward(model, data);
@@ -69,81 +61,56 @@ async function doLoad(): Promise<MujocoState> {
     }
   }
 
-  console.log("[mujoco] Ready");
-
   return { mj, model, data };
 }
 
-async function loadPandaModel(mj: any): Promise<void> {
-  // Fetch panda.xml
-  const pandaUrl = `${MUJOCO_BASE_PATH}franka_emika_panda/panda.xml`;
-  const pandaXml = await fetchText(pandaUrl);
+async function initWasm(): Promise<any> {
+  const loadModule = (await import(/* @vite-ignore */ "/vendor/mujoco/mujoco_wasm.js")).default;
+  return await loadModule();
+}
 
-  mkdirRecursive(mj, "/working/franka_emika_panda");
-  mj.FS.writeFile("/working/franka_emika_panda/panda.xml", pandaXml);
-
-  // Parse for mesh references
+async function loadMeshes(mj: any, pandaXml: string): Promise<void> {
   const parser = new DOMParser();
   const doc = parser.parseFromString(pandaXml, "text/xml");
-  const compiler = doc.querySelector("compiler");
-  const meshdir = compiler?.getAttribute("meshdir") || "assets";
+  const meshdir = doc.querySelector("compiler")?.getAttribute("meshdir") || "assets";
 
-  const meshes = doc.querySelectorAll("mesh[file]");
   const meshFiles = new Set<string>();
-  for (const mesh of meshes) {
+  for (const mesh of doc.querySelectorAll("mesh[file]")) {
     const file = mesh.getAttribute("file");
     if (file) meshFiles.add(file);
   }
 
-  // Fetch all mesh files in parallel
   const meshBasePath = `${MUJOCO_BASE_PATH}franka_emika_panda/${meshdir}/`;
   const vfsMeshDir = `/working/franka_emika_panda/${meshdir}`;
+  mkdirRecursive(mj, "/working/franka_emika_panda");
   mkdirRecursive(mj, vfsMeshDir);
 
-  console.log(`[mujoco] Fetching ${meshFiles.size} mesh files...`);
-
-  const promises = [...meshFiles].map(async (meshFile) => {
+  await Promise.all([...meshFiles].map(async (meshFile) => {
     try {
       const response = await fetch(meshBasePath + meshFile);
-      if (!response.ok) {
-        console.warn(`[mujoco] Failed to fetch mesh: ${meshFile} (${response.status})`);
-        return;
-      }
+      if (!response.ok) return;
       const buffer = await response.arrayBuffer();
       mj.FS.writeFile(`${vfsMeshDir}/${meshFile}`, new Uint8Array(buffer));
-    } catch (e) {
-      console.warn(`[mujoco] Error loading mesh ${meshFile}:`, e);
+    } catch {
+      // skip failed meshes
     }
-  });
-
-  await Promise.all(promises);
-  console.log("[mujoco] Mesh files loaded");
+  }));
 }
 
-async function buildMergedScene(): Promise<string> {
-  // Fetch both XMLs
-  const pandaXml = await fetchText(`${MUJOCO_BASE_PATH}franka_emika_panda/panda.xml`);
-  const sceneXml = await fetchText(`${MUJOCO_BASE_PATH}scene.xml`);
-
-  // Remove the <include> line and the <mujoco> wrapper from panda.xml,
-  // then inject panda's content into scene.xml
+function buildMergedScene(pandaXml: string, sceneXml: string): string {
   const pandaInner = pandaXml
     .replace(/<mujoco[^>]*>/, "")
     .replace(/<\/mujoco>/, "")
-    // Fix meshdir: scene.xml is at /working/, meshes are at /working/franka_emika_panda/assets/
     .replace('meshdir="assets"', 'meshdir="franka_emika_panda/assets"')
     // Boost gripper 4x
     .replace('forcerange="-100 100" ctrlrange="0 255"', 'forcerange="-400 400" ctrlrange="0 255"')
     .replace('gainprm="0.01568627451 0 0" biasprm="0 -100 -10"', 'gainprm="0.06274509804 0 0" biasprm="0 -400 -40"')
     .trim();
 
-  // Replace the <include> tag in scene.xml with the panda content
-  const merged = sceneXml.replace(
+  return sceneXml.replace(
     /<include\s+file="franka_emika_panda\/panda.xml"\s*\/>/,
     pandaInner,
   );
-
-  return merged;
 }
 
 function mkdirRecursive(mj: any, path: string): void {
@@ -151,18 +118,12 @@ function mkdirRecursive(mj: any, path: string): void {
   let current = "";
   for (const part of parts) {
     current += `/${part}`;
-    try {
-      mj.FS.mkdir(current);
-    } catch {
-      // already exists
-    }
+    try { mj.FS.mkdir(current); } catch { /* exists */ }
   }
 }
 
 async function fetchText(url: string): Promise<string> {
   const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch ${url}: ${response.status}`);
-  }
+  if (!response.ok) throw new Error(`Failed to fetch ${url}: ${response.status}`);
   return response.text();
 }
