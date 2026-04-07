@@ -469,6 +469,16 @@ body {
   font-style: italic;
 }
 
+.plan-error {
+  color: #ccc;
+  font-size: 0.8rem;
+  background: rgba(255, 100, 100, 0.1);
+  border: 1px solid rgba(255, 100, 100, 0.2);
+  border-radius: 6px;
+  padding: 10px 12px;
+  line-height: 1.4;
+}
+
 .plan-groups {
   font-size: 0.82rem;
   font-family: monospace;

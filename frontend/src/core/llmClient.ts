@@ -32,8 +32,7 @@ export async function callLLM(
   const data = await response.json();
   const message = data.choices?.[0]?.message;
   if (!message?.tool_calls || message.tool_calls.length === 0) {
-    console.warn("[llm] No tool calls in response. Content:", message?.content || message?.reasoning);
-    return [];
+    throw new Error("empty_plan");
   }
 
   return message.tool_calls.map(

@@ -52,6 +52,7 @@ function App() {
   const [scene, setScene] = useState<Scene | null>(null);
   const [plan, setPlan] = useState<ToolCall[] | null>(null);
   const [groups, setGroups] = useState<WaypointGroup[] | null>(null);
+  const [planError, setPlanError] = useState<string | null>(null);
   const [trajectory, setTrajectory] = useState<Trajectory | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [animatorStatus, setAnimatorStatus] = useState<AnimatorStatus>("idle");
@@ -210,6 +211,7 @@ function App() {
     if (!scene) return;
     setIsGenerating(true);
     setError(null);
+    setPlanError(null);
     setPlan(null);
     setGroups(null);
     setTrajectory(null);
@@ -244,7 +246,12 @@ function App() {
         animatorRef.current?.loadTrajectory(traj);
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg === "empty_plan") {
+        setPlanError("Task too complex for the hosted model. Try a simpler prompt or clone the repo to connect your own endpoint.");
+      } else {
+        setError(msg);
+      }
     } finally {
       setIsGenerating(false);
     }
@@ -328,7 +335,7 @@ function App() {
               isGenerating={isGenerating}
               disabled={loading || !scene}
             />
-            <PlanView groups={groups} currentWaypointIndex={currentStep} />
+            <PlanView groups={groups} currentWaypointIndex={currentStep} error={planError} />
             <ExecutionControls
               status={animatorStatus}
               onPlay={handlePlay}
@@ -361,7 +368,7 @@ function App() {
             isGenerating={isGenerating}
             disabled={!scene}
           />
-          <PlanView groups={groups} currentWaypointIndex={currentStep} />
+          <PlanView groups={groups} currentWaypointIndex={currentStep} error={planError} />
           <ExecutionControls
             status={animatorStatus}
             onPlay={handlePlay}

@@ -4,10 +4,18 @@ import type { WaypointGroup } from "../core/types";
 interface Props {
   groups: WaypointGroup[] | null;
   currentWaypointIndex: number;
+  error?: string | null;
 }
 
-export function PlanView({ groups, currentWaypointIndex }: Props) {
+export function PlanView({ groups, currentWaypointIndex, error }: Props) {
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
+
+  if (error) return (
+    <div className="panel">
+      <h2>Generated Plan</h2>
+      <div className="plan-error">{error}</div>
+    </div>
+  );
 
   if (!groups) return (
     <div className="panel">
