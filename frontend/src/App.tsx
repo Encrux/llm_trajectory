@@ -136,7 +136,16 @@ function App() {
 
         setLoading(false);
 
-        // Pre-computed plans are loaded on demand when user clicks Generate
+        // Load default plan immediately so Play button is available
+        const defaultPlan = PRECOMPUTED_PLANS[SUGGESTED_PROMPT];
+        if (mounted && defaultPlan) {
+          const currentScene = extractScene(mState);
+          setPlan(defaultPlan);
+          const traj = resolve(defaultPlan, currentScene);
+          setGroups([...traj.groups]);
+          setTrajectory(traj);
+          animatorRef.current?.loadTrajectory(traj);
+        }
 
         const SUBSTEPS = 5;
         function animate() {
@@ -212,8 +221,10 @@ function App() {
       const precomputed = PRECOMPUTED_PLANS[task];
       let toolCalls: ToolCall[];
       if (precomputed) {
-        // Brief delay so it feels like a real LLM call
-        await new Promise(r => setTimeout(r, 800 + Math.random() * 700));
+        // Brief delay so it feels like a real LLM call (skip for the default which is already shown)
+        if (task !== SUGGESTED_PROMPT || !trajectory) {
+          await new Promise(r => setTimeout(r, 800 + Math.random() * 700));
+        }
         toolCalls = precomputed;
       } else {
         const prompt = buildPrompt(scene, task);
