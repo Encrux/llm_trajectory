@@ -4,6 +4,8 @@ export interface MujocoState {
   mj: any;
   model: any;
   data: any;
+  /** Restore all qpos, qvel, ctrl to initial state */
+  resetScene: () => void;
 }
 
 const MUJOCO_BASE_PATH = "/mujoco/";
@@ -61,7 +63,22 @@ async function doLoad(): Promise<MujocoState> {
     }
   }
 
-  return { mj, model, data };
+  // Save initial state for scene reset
+  const initQpos = new Float64Array(model.nq);
+  const initQvel = new Float64Array(model.nv);
+  const initCtrl = new Float64Array(model.nu);
+  for (let i = 0; i < model.nq; i++) initQpos[i] = data.qpos[i];
+  for (let i = 0; i < model.nv; i++) initQvel[i] = data.qvel[i];
+  for (let i = 0; i < model.nu; i++) initCtrl[i] = data.ctrl[i];
+
+  function resetScene() {
+    for (let i = 0; i < model.nq; i++) data.qpos[i] = initQpos[i];
+    for (let i = 0; i < model.nv; i++) data.qvel[i] = initQvel[i];
+    for (let i = 0; i < model.nu; i++) data.ctrl[i] = initCtrl[i];
+    mj.mj_forward(model, data);
+  }
+
+  return { mj, model, data, resetScene };
 }
 
 async function initWasm(): Promise<any> {

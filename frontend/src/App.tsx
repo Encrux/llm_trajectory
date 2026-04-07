@@ -253,6 +253,7 @@ function App() {
   const handlePause = useCallback(() => animatorRef.current?.pause(), []);
   const handleReset = useCallback(() => {
     animatorRef.current?.reset();
+    mujocoRef.current?.resetScene();
     setCurrentStep(-1);
   }, []);
 
