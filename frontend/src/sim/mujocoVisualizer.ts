@@ -26,8 +26,8 @@ export function buildVisuals(
   for (let geomId = 0; geomId < model.ngeom; geomId++) {
     const geomType = model.geom_type[geomId];
 
-    // Skip floor plane (we render our own), transparent geoms, and tiny geoms (mocap markers)
-    if (geomType === mjGEOM_PLANE || model.geom_rgba[geomId * 4 + 3] === 0 || model.geom_size[geomId * 3] < 0.002) {
+    // Skip floor plane (we render our own) and fully transparent geoms
+    if (geomType === mjGEOM_PLANE || model.geom_rgba[geomId * 4 + 3] === 0) {
       meshes.push(new THREE.Object3D());
       continue;
     }
