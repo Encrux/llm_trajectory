@@ -4,6 +4,8 @@ Natural language to robot trajectory. Type a task, watch a Franka Panda execute 
 
 Runs entirely in the browser (MuJoCo WASM + Three.js). Only the LLM call goes to a backend.
 
+<video src="demo.mp4" autoplay loop muted playsinline></video>
+
 **[Live demo](https://llm-trajectory.boesch.dev)** | **[Blog post](https://boesch.dev/posts/llm-trajectory/)**
 
 ## Quick start
