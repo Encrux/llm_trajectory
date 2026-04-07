@@ -111,4 +111,4 @@ npx vitest run
 ```
 
 ## Disclaimer
-The system was designed and implemented by myself. This demo is a re-implementation of the original concept. AI was used to speed up the process. 
+The system was designed and implemented by myself back in 2023. This demo is a re-implementation of the original concept. AI was used to speed up the process. 
