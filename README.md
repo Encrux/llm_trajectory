@@ -17,6 +17,8 @@ npx vite
 
 Open `http://localhost:5173`. That's it. The default config points at a hosted backend that proxies to Groq's free tier, so no API key needed.
 
+The hosted demo uses my own endpoint (qwen/qwen3-32b) that is rate-limited to 20-60 requests per minute. Please be gentle with it.
+
 ## Use your own LLM
 
 Edit `frontend/.env`:

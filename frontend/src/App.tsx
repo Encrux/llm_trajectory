@@ -7,6 +7,24 @@ import { Animator, type AnimatorStatus } from "./sim/animator";
 import { Scene } from "./core/scene";
 import type { ToolCall, Trajectory, WaypointGroup } from "./core/types";
 import { buildPrompt, SUGGESTED_PROMPT } from "./core/prompt";
+
+// Pre-computed plans for example prompts — no LLM call needed
+const PRECOMPUTED_PLANS: Record<string, ToolCall[]> = {
+  [SUGGESTED_PROMPT]: [
+    { name: "pick", params: { object_name: "Red Cube" } },
+    { name: "place", params: { target_name: "Plate" } },
+  ],
+  "Put all the cubes on the plate": [
+    { name: "pick", params: { object_name: "Red Cube" } },
+    { name: "place", params: { target_name: "Plate" } },
+    { name: "pick", params: { object_name: "Blue Cube" } },
+    { name: "place", params: { target_name: "Plate" } },
+  ],
+  "Stack the red cube on top of the blue cube": [
+    { name: "pick", params: { object_name: "Red Cube" } },
+    { name: "place", params: { target_name: "Blue Cube", z_offset: 0.06 } },
+  ],
+};
 import { toOpenAITools } from "./core/primitives";
 import { callLLM } from "./core/llmClient";
 import { resolve } from "./core/resolver";
@@ -118,18 +136,7 @@ function App() {
 
         setLoading(false);
 
-        // Pre-computed plan for the suggested prompt — no LLM call needed
-        const defaultPlan: ToolCall[] = [
-          { name: "pick", params: { object_name: "Red Cube" } },
-          { name: "place", params: { target_name: "Plate" } },
-        ];
-        if (mounted) {
-          setPlan(defaultPlan);
-          const traj = resolve(defaultPlan, extractedScene);
-          setGroups([...traj.groups]);
-          setTrajectory(traj);
-          animatorRef.current?.loadTrajectory(traj);
-        }
+        // Pre-computed plans are loaded on demand when user clicks Generate
 
         const SUBSTEPS = 5;
         function animate() {
@@ -201,10 +208,19 @@ function App() {
     setAnimatorStatus("idle");
 
     try {
-      const prompt = buildPrompt(scene, task);
-      const tools = toOpenAITools();
-      const toolCalls = await callLLM(prompt, tools, config);
-      (window as any).umami?.track("generate-plan", { prompt: task.slice(0, 200) });
+      // Use precomputed plan if available, otherwise call LLM
+      const precomputed = PRECOMPUTED_PLANS[task];
+      let toolCalls: ToolCall[];
+      if (precomputed) {
+        // Brief delay so it feels like a real LLM call
+        await new Promise(r => setTimeout(r, 800 + Math.random() * 700));
+        toolCalls = precomputed;
+      } else {
+        const prompt = buildPrompt(scene, task);
+        const tools = toOpenAITools();
+        toolCalls = await callLLM(prompt, tools, config);
+        (window as any).umami?.track("generate-plan", { prompt: task.slice(0, 200) });
+      }
       setPlan(toolCalls);
 
       if (toolCalls.length > 0) {
