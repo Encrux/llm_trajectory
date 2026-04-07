@@ -261,7 +261,6 @@ function App() {
     (window as any).umami?.track("play-trajectory");
     await animatorRef.current?.play();
   }, [isMobile]);
-  const handlePause = useCallback(() => animatorRef.current?.pause(), []);
   const handleReset = useCallback(() => {
     animatorRef.current?.reset();
     mujocoRef.current?.resetScene();
@@ -333,7 +332,7 @@ function App() {
             <ExecutionControls
               status={animatorStatus}
               onPlay={handlePlay}
-              onPause={handlePause}
+
               onReset={handleReset}
               disabled={!trajectory}
             />
@@ -366,7 +365,6 @@ function App() {
           <ExecutionControls
             status={animatorStatus}
             onPlay={handlePlay}
-            onPause={handlePause}
             onReset={handleReset}
             disabled={!trajectory}
           />
