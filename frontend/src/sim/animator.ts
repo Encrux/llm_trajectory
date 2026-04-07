@@ -92,21 +92,26 @@ export class Animator {
     const origQpos = new Float64Array(this.state.model.nq);
     for (let i = 0; i < this.state.model.nq; i++) origQpos[i] = data.qpos[i];
 
+    // Track the IK seed (each solve starts from previous solution)
+    const ikSeed = new Float64Array(NUM_ARM_JOINTS);
+    for (let j = 0; j < NUM_ARM_JOINTS; j++) ikSeed[j] = data.qpos[j];
+
     for (let i = 0; i < this.trajectory.waypoints.length; i++) {
       const wp = this.trajectory.waypoints[i];
       if (wp.position) {
+        // Set seed for this solve
+        for (let j = 0; j < NUM_ARM_JOINTS; j++) data.qpos[j] = ikSeed[j];
         const solution = this.solveIK(wp.position);
         this.ikSolutions.set(i, solution);
-        for (let j = 0; j < NUM_ARM_JOINTS; j++) {
-          data.qpos[j] = solution[j];
-        }
-        // Yield to browser between solves so the UI stays responsive
+        // Update seed for next solve
+        for (let j = 0; j < NUM_ARM_JOINTS; j++) ikSeed[j] = solution[j];
+
+        // Restore original pose before yielding (so render loop sees stable robot)
+        for (let i = 0; i < this.state.model.nq; i++) data.qpos[i] = origQpos[i];
+        this.state.mj.mj_forward(this.state.model, data);
         await new Promise((r) => setTimeout(r, 0));
       }
     }
-
-    for (let i = 0; i < this.state.model.nq; i++) data.qpos[i] = origQpos[i];
-    this.state.mj.mj_forward(this.state.model, data);
 
     console.log(`[animator] Pre-computed IK for ${this.ikSolutions.size} waypoints`);
   }
