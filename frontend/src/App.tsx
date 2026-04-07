@@ -248,7 +248,7 @@ function App() {
         style={!isMobile && sidebarOpen ? { right: `${sidebarWidth}px` } : undefined}
       >
         <canvas ref={canvasRef} />
-        {loading && <div className="viewport-overlay">Loading MuJoCo + Franka Panda...</div>}
+        {loading && <div className="viewport-overlay">Loading MuJoCo + Franka Panda...<br/><span style={{fontSize: "0.75rem", opacity: 0.6}}>This may take a moment</span></div>}
         {isGenerating && <div className="viewport-overlay">Generating plan...</div>}
         {animatorStatus === "running" && currentStep === -1 && <div className="viewport-overlay">Computing trajectory...</div>}
         {error && !loading && <div className="viewport-overlay error">{error}</div>}
