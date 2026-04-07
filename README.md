@@ -4,7 +4,7 @@ Natural language to robot trajectory. Type a task, watch a Franka Panda execute 
 
 Runs entirely in the browser (MuJoCo WASM + Three.js). Only the LLM call goes to a backend.
 
-<video src="https://private-user-images.githubusercontent.com/28564983/574677449-06b4a244-97c7-4368-b9bd-7aaed495efbe.mp4?jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NzU1NjcyMzksIm5iZiI6MTc3NTU2NjkzOSwicGF0aCI6Ii8yODU2NDk4My81NzQ2Nzc0NDktMDZiNGEyNDQtOTdjNy00MzY4LWI5YmQtN2FhZWQ0OTVlZmJlLm1wND9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNjA0MDclMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjYwNDA3VDEzMDIxOVomWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPTkxOWUxOTIyZDFjNGZiZWY3Y2Q0OGZlMTM3YjUwYzM0NjA5N2I0MjgzMzNlM2Y4NmY2MTA4MzYyNmMxZGZmMmMmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0In0.5mFdZviZ8SpgHC4yv50M4cZKugcTR2X6XBdIReVVd6Q" autoplay loop muted playsinline></video>
+<video src="https://github.com/user-attachments/assets/5b92b6d0-e33d-4978-941e-dfdd722a7041" autoplay loop muted playsinline></video>
 
 **[Live demo](https://llm-trajectory.boesch.dev)** | **[Blog post](https://boesch.dev/posts/llm-trajectory/)**
 
